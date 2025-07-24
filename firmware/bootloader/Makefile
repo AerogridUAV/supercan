@@ -107,11 +107,13 @@ PROJECT = tuc_bl
 MCU  ?= cortex-m3
 
 # Version information
-GIT_DESC := $(shell git describe --dirty --always --tags)
-SOFT_HASH := $(shell git log -1 --pretty=format:%h 2> /dev/null)
-SOFT_VER := $(shell echo $(GIT_DESC) | sed 's/[^0-9.]*\([0-9.]*\).*/\1/')
-SOFT_VER_MAJOR := $(shell echo $(GIT_DESC) | sed 's/v\([0-9]*\).*/\1/')
-SOFT_VER_MINOR := $(shell echo $(GIT_DESC) | sed 's/v[0-9]*.\([0-9]*\).*/\1/')
+GIT_DESC := $(shell git describe --dirty --always --tags 2>/dev/null)
+_SOFT_HASH := $(shell git log -1 --pretty=format:%h 2> /dev/null)
+SOFT_HASH := $(if $(_SOFT_HASH),$(_SOFT_HASH),0)
+SOFT_VER := $(shell echo $(GIT_DESC) | sed -e 's/[^0-9.]*\([0-9.]*\).*/\1/' -e 't' -e 's/.*/0.0/')
+SOFT_VER_MAJOR := $(shell echo $(GIT_DESC) | sed -e 's/v\([0-9]*\).*/\1/' -e 't' -e 's/.*/0/')
+SOFT_VER_MINOR := $(shell echo $(GIT_DESC) | sed -e 's/v[0-9]*.\([0-9]*\).*/\1/' -e 't' -e 's/.*/0/')
+
 
 # Imported source files and paths.
 CHIBIOS  := ../lib/chibios
