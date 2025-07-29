@@ -22,12 +22,12 @@
 
 # Compiler options here.
 ifeq ($(USE_OPT),)
-  USE_OPT = -O2 -fomit-frame-pointer -falign-functions=16
+  USE_OPT = -Os -fomit-frame-pointer -falign-functions=16
 endif
 
 # C specific options here (added to USE_OPT).
 ifeq ($(USE_COPT),)
-  USE_COPT = 
+  USE_COPT =
 endif
 
 # C++ specific options here (added to USE_OPT).
@@ -42,7 +42,7 @@ endif
 
 # Linker extra options here.
 ifeq ($(USE_LDOPT),)
-  USE_LDOPT = 
+  USE_LDOPT =
 endif
 
 # Enable this if you want link time optimizations (LTO).
@@ -184,12 +184,14 @@ CSRC = $(ALLCSRC) \
        $(DSDLC_SRC_DIR)/uavcan.equipment.esc.RawCommand.c \
        $(DSDLC_SRC_DIR)/uavcan.equipment.device.Temperature.c \
        $(DSDLC_SRC_DIR)/uavcan.equipment.actuator.Status.c \
+       $(DSDLC_SRC_DIR)/uavcan.equipment.actuator.ArrayCommand.c \
+       $(DSDLC_SRC_DIR)/uavcan.equipment.actuator.Command.c \
        $(DSDLC_SRC_DIR)/uavcan.equipment.range_sensor.Measurement.c \
        $(DSDLC_SRC_DIR)/uavcan.equipment.power.BatteryInfo.c \
        $(DSDLC_SRC_DIR)/uavcan.equipment.power.CircuitStatus.c \
        $(DSDLC_SRC_DIR)/uavcan.equipment.fuelcell.Status.c \
 	     flash.c config.c uavcan.c node.c servos.c esc_telem.c adcs.c \
-       faulhaber_ctrl.c drs_parachute.c tfmini.c ie_fuelcell.c \
+       faulhaber_ctrl.c drs_parachute.c tfmini.c ie_fuelcell.c feetech_sts.c \
        main.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global

@@ -69,6 +69,12 @@ struct config_item_t config_items[] = {
     {.name = "FAULHABER min position", .type = CONFIG_TYPE_INT, .val.i = 60000, .def.i = 60000, .min.i = 0, .max.i = INT32_MAX},
     {.name = "FAULHABER max position", .type = CONFIG_TYPE_INT, .val.i = 3450000, .def.i = 3450000, .min.i = 0, .max.i = INT32_MAX},
 
+/* FEETECH STS configuration */
+    {.name = "FEETECH index", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 255},
+    {.name = "FEETECH id", .type = CONFIG_TYPE_INT, .val.i = 1, .def.i = 1, .min.i = 0, .max.i = 253},
+    {.name = "FEETECH port", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 1, .min.i = 0, .max.i = 3},
+    {.name = "FEETECH baudrate", .type = CONFIG_TYPE_INT, .val.i = 1000000, .def.i = 1000000, .min.i = 9600, .max.i = 1000000},
+
 /* ESC telemetry configuration */
     {.name = "ESC telem index", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 255},
     {.name = "ESC telem frequency", .type = CONFIG_TYPE_FLOAT, .val.f = 10, .def.f = 10, .min.f = 0.0001, .max.f = 10000},

@@ -30,6 +30,7 @@
 #include "esc_telem.h"
 #include "tfmini.h"
 #include "ie_fuelcell.h"
+#include "feetech_sts.h"
 
 /*===========================================================================*/
 /* Generic code.                                                             */
@@ -65,6 +66,7 @@ int main(void) {
   esc_telem_init();
   tfmini_init();
   ie_fuelcell_init();
+  feetech_sts_init();
 
   /*
    * Normal main() thread activity, spawning shells.
