@@ -7,14 +7,23 @@
 
 struct feetech_sts_t feetech_sts = {0};
 
-bool reached = false;
-size_t num_bytes = 0;
-int8_t statuss = 0;
-
 // Function to split a 16-bit value into two 8-bit values
 static void SplitByte(uint8_t *DataL, uint8_t *DataH, uint16_t Data) {
     *DataH = (Data >> 8);
     *DataL = (Data & 0xff);
+}
+
+static int16_t ReconstructSignedSpeed(uint16_t speed_data)
+{
+    // If bit 15 is set, it was originally negative
+    if (speed_data & (1 << 15))
+    {
+        // Clear bit 15 and make negative
+        return -(int16_t)(speed_data & ~(1 << 15));
+    }
+    
+    // Positive values remain unchanged
+    return (int16_t)speed_data;
 }
 
 // Function to send an instruction to the servo
@@ -67,24 +76,21 @@ static void parse_servo_response(uint8_t *response, uint8_t length) {
     // if (checksum != response[length - 1]) return; // Checksum mismatch
     
     // If no error and we have position data (8 bytes: pos, speed, load, voltage)
-    feetech_sts.present_temperature = 100;
-    if (error == 0 && data_length >= 9) { // 1 error byte + 8 data bytes
-        uint8_t *data = &response[5]; // Start of data
+    if (data_length >= 9) { // 1 error byte + 8 data bytes
         
         // Parse position (2 bytes, little endian)
-        feetech_sts.present_position = (int16_t)(data[0] | (data[1] << 8));
-        
+        feetech_sts.present_position = (int16_t)(response[5] | (response[6] << 8));
+
         // Parse speed (2 bytes, little endian) 
-        feetech_sts.present_speed = (int16_t)(data[2] | (data[3] << 8));
-        
+        feetech_sts.present_speed = (int16_t)(response[7] | (response[8] << 8));
+        feetech_sts.present_speed = ReconstructSignedSpeed(feetech_sts.present_speed);
+
         // Parse load (2 bytes, little endian)
-        feetech_sts.present_load = (int16_t)(data[4] | (data[5] << 8));
-        
-        // Parse voltage and temperature (if available)
-        if (data_length >= 11) { // 1 error + 8 data + voltage + temp
-            feetech_sts.present_voltage = data[6];
-            // feetech_sts.present_temperature = data[7];
-        }
+        feetech_sts.present_load = (int16_t)(response[9] | (response[10] << 8));
+
+        // Parse voltage and temperature
+        feetech_sts.present_voltage = response[11];
+        feetech_sts.present_temperature = response[12];
     }
 }
 
@@ -137,7 +143,7 @@ static THD_FUNCTION(feetech_sts_thd, arg) {
         send_instruction(feetech_sts.servo_id, INST_READ, data_read, sizeof(data_read));
         
         // Wait for response and read it
-        chThdSleepMicroseconds(350);        
+        // chThdSleepMicroseconds(350);        
 
         // Try to receive response from servo
         size_t recv_size = 50;
@@ -147,30 +153,11 @@ static THD_FUNCTION(feetech_sts_thd, arg) {
         // rx_bytes = sizeof(rx_buffer);
         msg_t response = uartReceiveTimeout(feetech_sts.port, &recv_size, (void *)buf, TIME_MS2I(1));
 
-        if (response == MSG_OK){
-            // Successfully received data
-            statuss = 1; // Reset status
-        } else if (response == MSG_TIMEOUT) {
-            statuss = 2; // Timeout, no data received 
-        }
-        else if (response == MSG_RESET) {
-            // No data received, reset status
-            statuss = 3;
-        } else {
-            // Error receiving data
-            statuss = 4;
-        }
-        // uartStartReceive(feetech_sts.port, recv_size, (void *)buf);
-        // chThdSleepMicroseconds(5000);;
-        // uartStopReceive(feetech_sts.port);
-        if (recv_size > 0) {
+        if (response != MSG_RESET && recv_size > 0) {
             // Parse the response and update servo status
-            reached = true;
             parse_servo_response((void *)buf, recv_size);
         }
-        
-        num_bytes = recv_size;
-        chThdSleepMicroseconds(500);;
+        chThdSleepMicroseconds(30);;
     }
 }
 
@@ -202,12 +189,12 @@ void broadcast_feetech_status(struct uavcan_iface_t *iface) {
     
     // Add temperature and voltage as debug info
     char debug_msg[100];
-    chsnprintf(debug_msg, 99, "Pos:%d Spd:%d Load:%d V:%dmV T:%dC, Reached:%d, Bytes:%d, Status:%d", 
+    chsnprintf(debug_msg, 99, "Pos:%d Spd:%d Load:%d V:%dmV T:%dC",
               feetech_sts.present_position,
               feetech_sts.present_speed, 
               feetech_sts.present_load,
               feetech_sts.present_voltage * 100, // Convert to mV
-              feetech_sts.present_temperature, reached, num_bytes, statuss);
+              feetech_sts.present_temperature);
     
     // Send debug message periodically
     static uint8_t debug_counter = 0;
