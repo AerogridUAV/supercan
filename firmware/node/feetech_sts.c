@@ -7,23 +7,23 @@
 
 struct feetech_sts_t feetech_sts = {0};
 
+uint8_t calculated_checksum;
+
 // Function to split a 16-bit value into two 8-bit values
 static void SplitByte(uint8_t *DataL, uint8_t *DataH, uint16_t Data) {
     *DataH = (Data >> 8);
     *DataL = (Data & 0xff);
 }
 
-static int16_t ReconstructSignedSpeed(uint16_t speed_data)
+static void ReconstructSignedSpeed(int16_t* speed)
 {
     // If bit 15 is set, it was originally negative
-    if (speed_data & (1 << 15))
+    if (*speed & (1 << 15))
     {
         // Clear bit 15 and make negative
-        return -(int16_t)(speed_data & ~(1 << 15));
+        *speed = -((*speed) & ~(1 << 15));
     }
-    
     // Positive values remain unchanged
-    return (int16_t)speed_data;
 }
 
 // Function to send an instruction to the servo
@@ -64,17 +64,19 @@ static void parse_servo_response(uint8_t *response, uint8_t length) {
     if (response[2] != feetech_sts.servo_id) return;
     
     uint8_t data_length = response[3];
-    uint8_t error = response[4];
-    
-    // // Calculate and verify checksum
-    // uint8_t checksum = 0;
-    // for (int i = 2; i < length - 1; i++) {
-    //     checksum += response[i];
-    // }
-    // checksum = ~checksum;
-    
-    // if (checksum != response[length - 1]) return; // Checksum mismatch
-    
+    feetech_sts.error_code = response[4];
+
+    // Calculate and verify checksum
+    calculated_checksum = 0;
+    for (int i = 2; i < length - 1; i++) {
+        calculated_checksum += response[i];
+    }
+    calculated_checksum = ~calculated_checksum;
+
+    feetech_sts.checksum = response[length - 1];
+
+    if (calculated_checksum != feetech_sts.checksum) return; // Checksum mismatch
+
     // If no error and we have position data (8 bytes: pos, speed, load, voltage)
     if (data_length >= 9) { // 1 error byte + 8 data bytes
         
@@ -83,10 +85,11 @@ static void parse_servo_response(uint8_t *response, uint8_t length) {
 
         // Parse speed (2 bytes, little endian) 
         feetech_sts.present_speed = (int16_t)(response[7] | (response[8] << 8));
-        feetech_sts.present_speed = ReconstructSignedSpeed(feetech_sts.present_speed);
+        ReconstructSignedSpeed(&feetech_sts.present_speed);
 
         // Parse load (2 bytes, little endian)
         feetech_sts.present_load = (int16_t)(response[9] | (response[10] << 8));
+        ReconstructSignedSpeed(&feetech_sts.present_load);
 
         // Parse voltage and temperature
         feetech_sts.present_voltage = response[11];
@@ -134,6 +137,9 @@ static THD_FUNCTION(feetech_sts_thd, arg) {
             uint8_t data_disable[2] = {STS_TORQUE_ENABLE, 0};
             send_instruction(feetech_sts.servo_id, INST_WRITE, data_disable, sizeof(data_disable));
         }
+
+        // Get acknowledgment from the servo
+
         chThdSleepMicroseconds(350);
 
         // --- Read servo feedback ---
@@ -189,13 +195,14 @@ void broadcast_feetech_status(struct uavcan_iface_t *iface) {
     
     // Add temperature and voltage as debug info
     char debug_msg[100];
-    chsnprintf(debug_msg, 99, "Pos:%d Spd:%d Load:%d V:%dmV T:%dC",
+    chsnprintf(debug_msg, 99, "Pos:%d Spd:%d Load:%d V:%dmV T:%dC Err:%d",
               feetech_sts.present_position,
               feetech_sts.present_speed, 
               feetech_sts.present_load,
               feetech_sts.present_voltage * 100, // Convert to mV
-              feetech_sts.present_temperature);
-    
+              feetech_sts.present_temperature,
+              feetech_sts.error_code);
+
     // Send debug message periodically
     static uint8_t debug_counter = 0;
     if (++debug_counter >= 1) { // Every 1 status messages (~5 seconds)
@@ -222,8 +229,8 @@ void feetech_sts_init(void) {
     feetech_sts.index = config_get_by_name("FEETECH index", 0)->val.i;
     feetech_sts.servo_id = config_get_by_name("FEETECH id", 0)->val.i;
     feetech_sts.uart_cfg.speed = config_get_by_name("FEETECH baudrate", 0)->val.i;
-    feetech_sts.uart_cfg.cr1 = USART_CR1_UE | USART_CR1_RE | USART_CR1_TE; // Enable UART and TX only for half-duplex
-    // feetech_sts.uart_cfg.cr3 = USART_CR3_HDSEL; // Enable half-duplex mode
+    feetech_sts.uart_cfg.cr1 = USART_CR1_UE | USART_CR1_TE; // Enable UART and TX only for half-duplex
+    feetech_sts.uart_cfg.cr3 = USART_CR3_HDSEL; // Enable half-duplex mode
 
     // Initialize command fields
     feetech_sts.target_speed = 500;
@@ -239,15 +246,13 @@ void feetech_sts_init(void) {
     uint8_t port = config_get_by_name("FEETECH port", 0)->val.i;
     if(port == 1) {
         // In half-duplex mode, only TX pin is used for bidirectional communication
-        palSetLineMode(SERIAL1_RX_LINE, PAL_MODE_INPUT);
         palSetLineMode(SERIAL1_TX_LINE, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
         feetech_sts.port = &UARTD1;
     } else if(port == 2) {
-        palSetLineMode(SERIAL2_RX_LINE, PAL_MODE_INPUT);
         palSetLineMode(SERIAL2_TX_LINE, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
         feetech_sts.port = &UARTD2;
     } else if(port == 3) {
-        palSetLineMode(SERIAL3_TX_LINE, PAL_MODE_STM32_ALTERNATE_OPENDRAIN);
+        palSetLineMode(SERIAL3_TX_LINE, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
         feetech_sts.port = &UARTD3;
     } else {
         feetech_sts.port = NULL;

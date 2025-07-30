@@ -70,6 +70,10 @@ struct feetech_sts_t {
     uint8_t present_voltage;      // Add voltage feedback
     uint8_t present_temperature;  // Add temperature feedback
     uint8_t status_transfer_id;
+
+    // Error handling
+    uint8_t error_code; // Add error code field
+    uint8_t checksum;
 };
 
 extern struct feetech_sts_t feetech_sts;
