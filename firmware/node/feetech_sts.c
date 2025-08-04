@@ -15,15 +15,42 @@ static void SplitByte(uint8_t *DataL, uint8_t *DataH, uint16_t Data) {
     *DataL = (Data & 0xff);
 }
 
-static void ReconstructSignedSpeed(int16_t* speed)
-{
-    // If bit 15 is set, it was originally negative
-    if (*speed & (1 << 15))
-    {
-        // Clear bit 15 and make negative
-        *speed = -((*speed) & ~(1 << 15));
+
+// Function to convert float speed to Feetech STS speed format
+// Input: speed in your desired units (e.g., steps/sec, rad/s, etc.)
+// Output: 16-bit value with bit 15 as direction flag
+static uint16_t FloatToFeeTechSpeed(float speed) {
+    uint16_t abs_speed = (uint16_t)fabsf(speed);
+    
+    // Clamp to maximum value (15-bit max since bit 15 is direction)
+    if (abs_speed > 0x7FFF) {
+        abs_speed = 0x7FFF;
     }
-    // Positive values remain unchanged
+    
+    // Set bit 15 if speed is negative
+    if (speed < 0) {
+        abs_speed |= (1 << 15);
+    }
+    
+    return abs_speed;
+}
+
+// Function to convert Feetech STS speed format back to float
+// Input: 16-bit value from servo with bit 15 as direction flag
+// Output: signed float speed
+static float FeeTechSpeedToFloat(uint16_t feetech_speed) {
+    // Extract absolute speed (clear bit 15)
+    uint16_t abs_speed = feetech_speed & 0x7FFF;
+    
+    // Convert to float and apply sign
+    float speed = (float)abs_speed;
+    
+    // If bit 15 is set, speed is negative
+    if (feetech_speed & (1 << 15)) {
+        speed = -speed;
+    }
+    
+    return speed;
 }
 
 // Function to send an instruction to the servo
@@ -84,12 +111,12 @@ static void parse_servo_response(uint8_t *response, uint8_t length) {
         feetech_sts.present_position = (int16_t)(response[5] | (response[6] << 8));
 
         // Parse speed (2 bytes, little endian) 
-        feetech_sts.present_speed = (int16_t)(response[7] | (response[8] << 8));
-        ReconstructSignedSpeed(&feetech_sts.present_speed);
+        uint16_t raw_speed = (uint16_t)(response[7] | (response[8] << 8));
+        feetech_sts.present_speed = (int16_t)FeeTechSpeedToFloat(raw_speed);
 
         // Parse load (2 bytes, little endian)
-        feetech_sts.present_load = (int16_t)(response[9] | (response[10] << 8));
-        ReconstructSignedSpeed(&feetech_sts.present_load);
+        uint16_t raw_load = (uint16_t)(response[9] | (response[10] << 8));
+        feetech_sts.present_load = (int16_t)FeeTechSpeedToFloat(raw_load);
 
         // Parse voltage and temperature
         feetech_sts.present_voltage = response[11];
@@ -113,21 +140,15 @@ static THD_FUNCTION(feetech_sts_thd, arg) {
 
         // --- Write target speed based on UAVCAN commands ---
         if (feetech_sts.torque_enabled) {
-            uint8_t data_write[7]= {0};
-            volatile int sign = 0;
-            if (feetech_sts.target_speed < 0)
-            {
-            sign = 1;
-            feetech_sts.target_speed *= -1;
-            }
+            uint8_t data_write[7] = {0};
+            
+            // Convert float target speed to Feetech format
+            uint16_t feetech_speed = FloatToFeeTechSpeed(feetech_sts.target_speed);
+            
             data_write[0] = STS_GOAL_POSITION_L;
             SplitByte(&data_write[1], &data_write[2], 0);
             SplitByte(&data_write[3], &data_write[4], 0);
-            SplitByte(&data_write[5], &data_write[6], feetech_sts.target_speed);
-            if (sign)
-            {
-                data_write[6] |= (1 << 7);  // Set bit 7 (replace bitSet)
-            }
+            SplitByte(&data_write[5], &data_write[6], feetech_speed);
 
             // Send the command to the servo
             send_instruction(feetech_sts.servo_id, INST_WRITE, data_write, sizeof(data_write));
@@ -233,8 +254,8 @@ void feetech_sts_init(void) {
     feetech_sts.uart_cfg.cr3 = USART_CR3_HDSEL; // Enable half-duplex mode
 
     // Initialize command fields
-    feetech_sts.target_speed = 500;
-    feetech_sts.torque_enabled = false;
+    feetech_sts.target_speed = -500;
+    feetech_sts.torque_enabled = true;
     feetech_sts.present_position = 0;
     feetech_sts.present_speed = 0;
     feetech_sts.present_load = 0;

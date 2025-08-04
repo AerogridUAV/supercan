@@ -418,9 +418,8 @@ static void handle_actuator_command(struct uavcan_iface_t *iface, CanardRxTransf
         
         // Check if this command is for our Feetech servo
         if (actuator_cmd->actuator_id == feetech_sts.index) {
-            // Convert UAVCAN command (-1.0 to +1.0) to servo speed (-1000 to +1000)
-            int16_t servo_speed = (int16_t)(actuator_cmd->command_value * 1000.0f);
-            
+            // Convert UAVCAN command (-1.0 to +1.0) to servo speed (-5000 to +5000)
+            int16_t servo_speed = (int16_t)(actuator_cmd->command_value * 5000.0f);
             // Set the target speed for the Feetech servo
             feetech_sts.target_speed = servo_speed;
             feetech_sts.torque_enabled = (actuator_cmd->command_value != 0.0f);
