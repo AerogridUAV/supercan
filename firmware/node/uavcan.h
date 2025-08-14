@@ -26,6 +26,9 @@
 #include <uavcan.protocol.param.ExecuteOpcode.h>
 #include <uavcan.protocol.param.ExecuteOpcode.h>
 #include <uavcan.tunnel.Call.h>
+#include <com.feetech.servo.Instruction.h>
+#include <com.feetech.servo.Config.h>
+#include <com.feetech.servo.Status.h>
 
 
 struct uavcan_iface_t {

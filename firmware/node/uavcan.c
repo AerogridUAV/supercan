@@ -348,7 +348,11 @@ static THD_FUNCTION(uavcan_thrd, p) {
     strncat(msg, "; Bridge: None)", 89);
   uavcanDebugIface(iface, UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "UAVCAN", msg);
 
+  broadcast_servo_config(iface);
+  broadcast_feetech_debug(iface);
+
   while(true) {
+    broadcast_feetech_debug(iface);
     broadcast_node_status(iface);
     broadcast_feetech_status(iface);
 
@@ -356,7 +360,8 @@ static THD_FUNCTION(uavcan_thrd, p) {
     canardCleanupStaleTransfers(&iface->canard, TIME_I2MS(chVTGetSystemTimeX()));
     chMtxUnlock(&iface->mutex);
 
-    chThdSleepMilliseconds(500);
+    uint32_t sleeptime = 1000 / feetech_sts.config.can_frequency;
+    chThdSleepMilliseconds(sleeptime);
   }
 }
 
@@ -402,37 +407,6 @@ static void handle_allocation_response(struct uavcan_iface_t *iface, CanardRxTra
     canardSetLocalNodeID(&iface->canard, msg.node_id);
     //printf("Node ID allocated: %d\n", allocated_node_id);
   }
-}
-
-// Add the missing actuator command handler
-static void handle_actuator_command(struct uavcan_iface_t *iface, CanardRxTransfer* transfer) {
-    struct uavcan_equipment_actuator_ArrayCommand cmd;
-    
-    if (uavcan_equipment_actuator_ArrayCommand_decode(transfer, &cmd)) {
-        return; // Decode failed
-    }
-    
-    // Process each command in the array
-    for (uint8_t i = 0; i < cmd.commands.len; i++) {
-        struct uavcan_equipment_actuator_Command *actuator_cmd = &cmd.commands.data[i];
-        
-        // Check if this command is for our Feetech servo
-        if (actuator_cmd->actuator_id == feetech_sts.index) {
-            // Convert UAVCAN command (-1.0 to +1.0) to servo speed (-5000 to +5000)
-            int16_t servo_speed = (int16_t)(actuator_cmd->command_value * 5000.0f);
-            // Set the target speed for the Feetech servo
-            feetech_sts.target_speed = servo_speed;
-            feetech_sts.torque_enabled = (actuator_cmd->command_value != 0.0f);
-            
-            // Debug message
-            char debug_msg[90];
-            chsnprintf(debug_msg, 89, "Feetech CMD: ID=%d, Speed=%d", 
-                      actuator_cmd->actuator_id, servo_speed);
-            uavcanDebugIface(iface, UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_DEBUG, "FEETECH", debug_msg);
-            
-            break; // Found our servo, exit loop
-        }
-    }
 }
 
 /**
@@ -500,9 +474,17 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
     case UAVCAN_PROTOCOL_RESTARTNODE_ID:
       *out_data_type_signature = UAVCAN_PROTOCOL_RESTARTNODE_SIGNATURE;
       return true;
+    case COM_FEETECH_SERVO_INSTRUCTION_ID:
+      *out_data_type_signature = COM_FEETECH_SERVO_INSTRUCTION_SIGNATURE;
+      return true;
+    case COM_FEETECH_SERVO_CONFIG_ID:
+      *out_data_type_signature = COM_FEETECH_SERVO_CONFIG_SIGNATURE;
+      return true;
+    case COM_FEETECH_SERVO_STATUS_ID:
+      *out_data_type_signature = COM_FEETECH_SERVO_STATUS_SIGNATURE;
+      return true;
   }
   
-
   return false;
 }
 
@@ -530,9 +512,6 @@ static void onTransferReceived(CanardInstance* ins, CanardRxTransfer* transfer)
     case UAVCAN_EQUIPMENT_ESC_RAWCOMMAND_ID:
       handle_esc_rawcommand(iface, transfer);
       break;
-    case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
-        handle_actuator_command(iface, transfer);
-      break;
     case UAVCAN_PROTOCOL_PARAM_GETSET_ID:
       handle_param_getset(iface, transfer);
       break;
@@ -554,6 +533,9 @@ static void onTransferReceived(CanardInstance* ins, CanardRxTransfer* transfer)
     case UAVCAN_PROTOCOL_RESTARTNODE_ID:
       servos_disable();
       NVIC_SystemReset();
+      break;
+    case COM_FEETECH_SERVO_INSTRUCTION_ID:
+      handle_can_servo_instruction(iface, transfer);
       break;
   }
 
