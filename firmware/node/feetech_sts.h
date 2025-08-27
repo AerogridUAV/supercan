@@ -120,14 +120,15 @@ typedef enum{
 // Servo configuration structure
 struct servo_config_t {
     uint8_t gear_ratio;
-    uint16_t min_angle;
-    uint16_t max_angle;
+    uint8_t min_angle;
+    uint8_t max_angle;
     float serial_frequency;
     float can_frequency;
     loglevel_t log_level;
     uint16_t max_speed;
     uint32_t load_threshold;
     uint32_t integral_load_threshold;
+    uint32_t integral_load_min_threshold;
     uint8_t load_timeout;
 };
 
@@ -164,6 +165,8 @@ struct feetech_sts_t {
     uint8_t latest_error_code;
     uint8_t latest_health_state;
 
+    bool safe_load;
+    bool integral_load_active;
     uint16_t integral_load; 
     systime_t load_timer;
 };
@@ -209,6 +212,7 @@ servo_response_t parse_servo_status(uint8_t *response, uint8_t length);
 servo_response_t servo_update_status(void);
 
 // High-level servo control functions
+void unreach_endstop(void);
 void reach_endstop(void);
 
 // Configuration functions

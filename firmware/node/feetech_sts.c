@@ -38,13 +38,13 @@ void feetech_sts_init(void) {
     feetech_sts.config.serial_frequency = config_get_by_name("FEETECH serial frequency", 0)->val.f;
     feetech_sts.config.load_threshold = config_get_by_name("FEETECH load threshold", 0)->val.i;
     feetech_sts.config.integral_load_threshold = config_get_by_name("FEETECH integral load threshold", 0)->val.i;
+    feetech_sts.config.integral_load_min_threshold = config_get_by_name("FEETECH integral load min threshold", 0)->val.i;
     feetech_sts.config.load_timeout = config_get_by_name("FEETECH load timeout", 0)->val.i;
     feetech_sts.config.log_level = feetech_get_log_level(config_get_by_name("FEETECH log level", 0)->val.i);
-    feetech_sts.config.min_angle = 0;
-    feetech_sts.config.max_angle = 90;
-    feetech_sts.config.log_level = long_log_message;
-    feetech_sts.config.max_speed = 4000; 
-    
+    feetech_sts.config.min_angle = config_get_by_name("FEETECH min angle", 0)->val.i;
+    feetech_sts.config.max_angle = config_get_by_name("FEETECH max angle", 0)->val.i;
+    feetech_sts.config.max_speed = config_get_by_name("FEETECH max speed", 0)->val.i;
+
     // Initialize control state
     feetech_sts.armed = true;
     feetech_sts.target_wing_angle = 0;
@@ -63,6 +63,10 @@ void feetech_sts_init(void) {
     feetech_sts.latest_temperature = 0;
     feetech_sts.latest_error_code = 0;
     feetech_sts.latest_health_state = 0;
+
+    feetech_sts.integral_load = 0;
+    feetech_sts.safe_load = true;
+    feetech_sts.integral_load_active = false;
 
     debug_msg.send = false;
     debug_msg.message[0] = '\0';
@@ -96,6 +100,8 @@ void feetech_sts_init(void) {
 
 void feetech_init_sequence(void) {
 
+    unreach_endstop();
+
     feetech_setup_angle();
 
     reach_endstop();
@@ -114,10 +120,7 @@ static THD_FUNCTION(feetech_serial_thd, arg) {
     chRegSetThreadName("feetech_serial");
     // Main serial loop (only accessible after init is complete)
 
-    while (true) {
-        // #TODO: Main serial loop implementation will go here
-        // For now, just update servo status periodically
-
+    while (feetech_sts.safe_load) {
         feetech_move_to_target();
 
         servo_update_status();
@@ -127,6 +130,7 @@ static THD_FUNCTION(feetech_serial_thd, arg) {
         uint32_t period_ms = (uint32_t)(1000.0f / feetech_sts.config.serial_frequency);
         chThdSleepMilliseconds(period_ms);
     }
+    feetech_disarm();
 }
 
 // ============================================================================
@@ -164,6 +168,14 @@ void FeetechSignedtoSignedInt(uint8_t DataL,uint8_t DataH, int16_t *Data)
     } else {
         // Positive value
         JoinBytes(DataL, DataH, Data);
+    }
+}
+
+void ClampWingPosition(int16_t *wing_position) {
+    if (*wing_position < feetech_sts.config.min_angle) {
+        *wing_position = feetech_sts.config.min_angle;
+    } else if (*wing_position > feetech_sts.config.max_angle) {
+        *wing_position = feetech_sts.config.max_angle;
     }
 }
 
@@ -319,9 +331,23 @@ servo_response_t parse_servo_status(uint8_t *response, uint8_t length) {
 // ============================================================================
 // HIGH-LEVEL SERVO CONTROL FUNCTIONS
 // ============================================================================
+void unreach_endstop(void) {
+    if(!palReadLine(SERVO1_LINE)) {
+        servo_update_status();
+        feetech_sts.target_wing_angle = feetech_sts.latest_wing_angle + 10;
+        feetech_sts.target_servo_position = WingPositionToServoPosition(feetech_sts.target_wing_angle);
+        feetech_set_position(feetech_sts.target_servo_position, 200);
+        while(feetech_sts.target_wing_angle != feetech_sts.latest_wing_angle){
+            // Update status
+            servo_update_status();
+        }
+    }
+}
+
+
 void reach_endstop(void) {
     feetech_set_position(STS_MAX_POSITION_GLOBAL, 200);
-    while(palReadLine(SERVO1_LINE)) {
+    while(palReadLine(SERVO1_LINE) & feetech_sts.safe_load) {
         // Update status
         servo_update_status();
     }
@@ -365,6 +391,32 @@ servo_response_t servo_update_status(void) {
     // Parse the response
     servo_response_t result = parse_servo_status(response, length);
 
+
+    // Check safe load conditions
+    if (!feetech_initialized){
+        if (feetech_sts.latest_load >= feetech_sts.config.load_threshold){
+            // Trigger unsafe load condition if load exceeds threshold
+            feetech_sts.safe_load = false;
+        }
+        if (feetech_sts.latest_load >= feetech_sts.config.integral_load_min_threshold) {
+            // Start integral load calculation and timer
+            feetech_sts.integral_load_active = true;
+            feetech_sts.load_timer = chVTGetSystemTime();
+        }
+        if (feetech_sts.integral_load_active) {
+            feetech_sts.integral_load += fmax(feetech_sts.latest_load - feetech_sts.config.integral_load_min_threshold, 0);
+            if (feetech_sts.integral_load >= feetech_sts.config.integral_load_threshold) {
+                // Trigger unsafe load condition if integral load exceeds threshold
+                feetech_sts.safe_load = false;
+            }
+            else if (chVTTimeElapsedSinceX(feetech_sts.load_timer) > TIME_MS2I(feetech_sts.config.load_timeout)) {
+                // Reset integral load if integral load threshold is not met within timeout
+                feetech_sts.integral_load_active = false;
+                feetech_sts.integral_load = 0;
+            }
+        }
+    }
+
     return result;
 }
 
@@ -398,16 +450,8 @@ void handle_can_servo_instruction(struct uavcan_iface_t *iface, CanardRxTransfer
         case COM_FEETECH_SERVO_INSTRUCTION_MSG_TYPE_SET_TARGET_ANGLE:
             {
                 FeetechSignedtoSignedInt(instruction.data[0], instruction.data[1], &feetech_sts.target_wing_angle);
+                ClampWingPosition(&feetech_sts.target_wing_angle);
                 feetech_sts.target_servo_position = WingPositionToServoPosition(feetech_sts.target_wing_angle);
-                int16_t abs_target_angle;
-                JoinBytes(instruction.data[0], instruction.data[1], &abs_target_angle);
-                char targetmsg[100]; 
-                chsnprintf(targetmsg, sizeof(targetmsg), 
-                        "LL: %02x, HH: %02x, Target angle: %04x, Target angleDec: %d Abs:%04x", instruction.data[0], instruction.data[1], feetech_sts.target_wing_angle, feetech_sts.target_wing_angle, abs(abs_target_angle));
-                
-                feetech_debug_message(targetmsg);
-                // F6 FF
-                // 0A 00
             }
             break;
             

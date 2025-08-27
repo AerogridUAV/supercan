@@ -432,7 +432,7 @@ class InstructionWidget(QtWidgets.QWidget):
         try:
             m = self.node_wrapper.make_instruction()
             m.actuator_id = self.actuator_id_spin.value()
-            data = [0, 0, 0, 0]
+            data = [0, 0]
 
             if cmd_type == "ARM":
                 m.message_type = 0  # ARM_DISARM
