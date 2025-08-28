@@ -75,13 +75,18 @@ void feetech_sts_init(void) {
     uint8_t port = config_get_by_name("FEETECH port", 0)->val.i;
     if(port == 1) {
         palSetLineMode(SERIAL1_TX_LINE, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
+        palSetLineMode(SERIAL1_RX_LINE, PAL_MODE_INPUT_PULLUP);
         palSetLineMode(SERVO1_LINE, PAL_MODE_INPUT_PULLUP);
         feetech_sts.port = &UARTD1;
     } else if(port == 2) {
         palSetLineMode(SERIAL2_TX_LINE, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
+        palSetLineMode(SERIAL2_RX_LINE, PAL_MODE_INPUT_PULLUP);
+        palSetLineMode(SERVO2_LINE, PAL_MODE_INPUT_PULLUP);
         feetech_sts.port = &UARTD2;
     } else if(port == 3) {
         palSetLineMode(SERIAL3_TX_LINE, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
+        palSetLineMode(SERIAL3_RX_LINE, PAL_MODE_INPUT_PULLUP);
+        palSetLineMode(SERVO3_LINE, PAL_MODE_INPUT_PULLUP);
         feetech_sts.port = &UARTD3;
     } else {
         feetech_sts.port = NULL;
