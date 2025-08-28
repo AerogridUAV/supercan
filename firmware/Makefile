@@ -1,6 +1,10 @@
 #BOARD ?= lisa_m2.0
 BOARD ?= supercan_v2.0
-BMP_PORT ?= $(shell ls /dev/bmp-gdb 2>/dev/null || echo /dev/ttyACM0)
+BMP_PORT ?= $(shell \
+    for dev in /dev/ttyACM*; do \
+        udevadm info -a -n $$dev | grep -q 'ATTRS{product}=="Black Magic Probe"' && echo $$dev; \
+    done | head -n1 \
+)
 GDB ?= gdb
 
 all: bootloader node
