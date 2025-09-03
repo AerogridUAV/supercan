@@ -37,9 +37,6 @@ void feetech_sts_init(void) {
     feetech_sts.config.can_frequency = config_get_by_name("FEETECH CAN frequency", 0)->val.f;
     feetech_sts.config.serial_frequency = config_get_by_name("FEETECH serial frequency", 0)->val.f;
     feetech_sts.config.load_threshold = config_get_by_name("FEETECH load threshold", 0)->val.i;
-    feetech_sts.config.integral_load_threshold = config_get_by_name("FEETECH integral load threshold", 0)->val.i;
-    feetech_sts.config.integral_load_min_threshold = config_get_by_name("FEETECH integral load min threshold", 0)->val.i;
-    feetech_sts.config.load_timeout = config_get_by_name("FEETECH load timeout", 0)->val.i;
     feetech_sts.config.log_level = feetech_get_log_level(config_get_by_name("FEETECH log level", 0)->val.i);
     feetech_sts.config.min_angle = config_get_by_name("FEETECH min angle", 0)->val.i;
     feetech_sts.config.max_angle = config_get_by_name("FEETECH max angle", 0)->val.i;
@@ -64,9 +61,7 @@ void feetech_sts_init(void) {
     feetech_sts.latest_error_code = 0;
     feetech_sts.latest_health_state = 0;
 
-    feetech_sts.integral_load = 0;
     feetech_sts.safe_load = true;
-    feetech_sts.integral_load_active = false;
 
     debug_msg.send = false;
     debug_msg.message[0] = '\0';
@@ -167,20 +162,32 @@ void FeetechSignedtoSignedInt(uint8_t DataL,uint8_t DataH, int16_t *Data)
 {
     // Check if sign bit is set
     if (DataH & 0x80) {
-        // Negative value 
         JoinBytes(DataL, DataH & 0x7F, Data);
-        *Data += INT16_MIN;
+        *Data = -(*Data);
     } else {
         // Positive value
         JoinBytes(DataL, DataH, Data);
     }
 }
 
-void ClampWingPosition(int16_t *wing_position) {
-    if (*wing_position < feetech_sts.config.min_angle) {
-        *wing_position = feetech_sts.config.min_angle;
-    } else if (*wing_position > feetech_sts.config.max_angle) {
-        *wing_position = feetech_sts.config.max_angle;
+void FeetechSignedLoadtoSignedInt(uint8_t DataL,uint8_t DataH, int16_t *Data)
+{
+    // Check if sign bit is set
+    if (DataH & 0x04) {
+        JoinBytes(DataL, DataH & 0xFB, Data);
+        *Data = -(*Data);
+    } else {
+        // Positive value
+        JoinBytes(DataL, DataH, Data);
+    }
+}
+
+void ClampWingPosition(int16_t *wing_position_cdg) {
+    if (*wing_position_cdg < feetech_sts.config.min_angle) {
+        *wing_position_cdg = feetech_sts.config.min_angle;
+    // } else if (*wing_position_cdg > 9000) {
+    } else if (*wing_position_cdg > feetech_sts.config.max_angle) {
+        *wing_position_cdg = feetech_sts.config.max_angle;
     }
 }
 
@@ -188,14 +195,14 @@ int16_t ServoPositionToWingPosition(int16_t servo_position) {
     // Convert servo position to wing position
     // Assuming 0-4096 range for angles, adjust based on gear ratio
     servo_position -= feetech_sts.calculation_offset;
-    int16_t wing_target = (int16_t)((float)(servo_position / (feetech_sts.config.gear_ratio * DEGREE_TO_FEETECH)));
-    return wing_target;
+    int16_t wing_target_cdg = (int16_t)((float)(servo_position *DEGREE_TO_CENTIDEGFREE / (feetech_sts.config.gear_ratio * DEGREE_TO_FEETECH)));
+    return wing_target_cdg;
 }
 
-int16_t WingPositionToServoPosition(int16_t wing_position) {
+int16_t WingPositionToServoPosition(int16_t wing_position_cdg) {
     // Convert wing position back to servo position
     // Assuming 0-4096 range for angles, adjust based on gear ratio
-    int16_t servo_target = (int16_t)((float)(wing_position * feetech_sts.config.gear_ratio * DEGREE_TO_FEETECH));
+    int16_t servo_target = (int16_t)((float)(wing_position_cdg * feetech_sts.config.gear_ratio * CENTIDEGREE_TO_DEGREE * DEGREE_TO_FEETECH));
     servo_target += feetech_sts.calculation_offset;
 
     return servo_target;
@@ -324,9 +331,9 @@ servo_response_t parse_servo_status(uint8_t *response, uint8_t length) {
         feetech_sts.latest_wing_angle = ServoPositionToWingPosition(feetech_sts.current_position_global);
 
         FeetechSignedtoSignedInt(response[7], response[8], &feetech_sts.latest_servo_speed);
-        FeetechSignedtoSignedInt(response[9], response[10], &feetech_sts.latest_load);
+        FeetechSignedLoadtoSignedInt(response[9], response[10], &feetech_sts.latest_load);
 
-        feetech_sts.latest_voltage = response[11]+1;
+        feetech_sts.latest_voltage = response[11];
         feetech_sts.latest_temperature = response[12];
     }
     
@@ -399,26 +406,9 @@ servo_response_t servo_update_status(void) {
 
     // Check safe load conditions
     if (!feetech_initialized){
-        if (feetech_sts.latest_load >= feetech_sts.config.load_threshold){
+        if (abs(feetech_sts.latest_load) >= feetech_sts.config.load_threshold){
             // Trigger unsafe load condition if load exceeds threshold
             feetech_sts.safe_load = false;
-        }
-        if (feetech_sts.latest_load >= feetech_sts.config.integral_load_min_threshold) {
-            // Start integral load calculation and timer
-            feetech_sts.integral_load_active = true;
-            feetech_sts.load_timer = chVTGetSystemTime();
-        }
-        if (feetech_sts.integral_load_active) {
-            feetech_sts.integral_load += fmax(feetech_sts.latest_load - feetech_sts.config.integral_load_min_threshold, 0);
-            if (feetech_sts.integral_load >= feetech_sts.config.integral_load_threshold) {
-                // Trigger unsafe load condition if integral load exceeds threshold
-                feetech_sts.safe_load = false;
-            }
-            else if (chVTTimeElapsedSinceX(feetech_sts.load_timer) > TIME_MS2I(feetech_sts.config.load_timeout)) {
-                // Reset integral load if integral load threshold is not met within timeout
-                feetech_sts.integral_load_active = false;
-                feetech_sts.integral_load = 0;
-            }
         }
     }
 
@@ -525,7 +515,6 @@ void broadcast_feetech_status(struct uavcan_iface_t *iface) {
         msg.temp = feetech_sts.latest_temperature;
         msg.errcode = feetech_sts.latest_error_code;
         msg.health_state = feetech_sts.latest_health_state;
-        msg.integral_load = feetech_sts.integral_load;
 
         // Encoding the long message
         total_size = com_feetech_servo_Debug_encode(&msg, buffer);

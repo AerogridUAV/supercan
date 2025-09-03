@@ -78,13 +78,10 @@ struct config_item_t config_items[] = {
     {.name = "FEETECH max speed", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 32767},
     {.name = "FEETECH CAN frequency", .type = CONFIG_TYPE_FLOAT, .val.f = 10.0, .def.f = 10.0, .min.f = 0.1, .max.f = 1000.0},
     {.name = "FEETECH serial frequency", .type = CONFIG_TYPE_FLOAT, .val.f = 100.0, .def.f = 100.0, .min.f = 1.0, .max.f = 1000.0},
-    {.name = "FEETECH load threshold", .type = CONFIG_TYPE_INT, .val.i = 1120, .def.i = 1120, .min.i = 0, .max.i = 2000},
-    {.name = "FEETECH integral load min threshold", .type = CONFIG_TYPE_INT, .val.i = 1100, .def.i = 1100, .min.i = 0, .max.i = 1500},
-    {.name = "FEETECH integral load threshold", .type = CONFIG_TYPE_INT, .val.i = 100, .def.i = 100, .min.i = 0, .max.i = 500},
-    {.name = "FEETECH load timeout", .type = CONFIG_TYPE_INT, .val.i = 5000, .def.i = 5000, .min.i = 0, .max.i = 60000},
+    {.name = "FEETECH load threshold", .type = CONFIG_TYPE_INT, .val.i = 130, .def.i = 130, .min.i = 0, .max.i = 2000},
     {.name = "FEETECH log level", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 1},
-    {.name = "FEETECH min angle", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 180},
-    {.name = "FEETECH max angle", .type = CONFIG_TYPE_INT, .val.i = 90, .def.i = 90, .min.i = 0, .max.i = 180},
+    {.name = "FEETECH min angle", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 18000},
+    {.name = "FEETECH max angle", .type = CONFIG_TYPE_INT, .val.i = 9000, .def.i = 9000, .min.i = 0, .max.i = 18000},
 
 /* ESC telemetry configuration */
     {.name = "ESC telem index", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 255},

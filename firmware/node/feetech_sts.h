@@ -89,6 +89,9 @@ typedef enum {
 #define SERVO_SLEEP_TIME_US 1000 // us
 
 #define DEGREE_TO_FEETECH -4096.0f/360.0f // Conversion factor from degrees to Feetech servo units
+#define DEGREE_TO_CENTIDEGFREE 100.0f
+#define CENTIDEGREE_TO_DEGREE 0.01f
+#define CENTIDEGREE_TO_FEETECH -4096.0f/36000.0f // Conversion factor from centidegrees to Feetech servo units
 
 // Minimum and maximum local positions
 #define STS_MIN_POSITION_LOCAL 0
@@ -120,16 +123,13 @@ typedef enum{
 // Servo configuration structure
 struct servo_config_t {
     uint8_t gear_ratio;
-    uint8_t min_angle;
-    uint8_t max_angle;
+    uint16_t min_angle;
+    uint16_t max_angle;
     float serial_frequency;
     float can_frequency;
     loglevel_t log_level;
     uint16_t max_speed;
     uint32_t load_threshold;
-    uint32_t integral_load_threshold;
-    uint32_t integral_load_min_threshold;
-    uint8_t load_timeout;
 };
 
 // Main servo state structure
@@ -166,9 +166,6 @@ struct feetech_sts_t {
     uint8_t latest_health_state;
 
     bool safe_load;
-    bool integral_load_active;
-    uint16_t integral_load; 
-    systime_t load_timer;
 };
 
 struct debug_message_t {
