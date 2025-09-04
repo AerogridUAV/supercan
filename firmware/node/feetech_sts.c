@@ -346,7 +346,7 @@ servo_response_t parse_servo_status(uint8_t *response, uint8_t length) {
 void unreach_endstop(void) {
     if(!palReadLine(SERVO1_LINE)) {
         servo_update_status();
-        feetech_sts.target_wing_angle = feetech_sts.latest_wing_angle + 10;
+        feetech_sts.target_wing_angle = feetech_sts.latest_wing_angle + 1000;
         feetech_sts.target_servo_position = WingPositionToServoPosition(feetech_sts.target_wing_angle);
         feetech_set_position(feetech_sts.target_servo_position, 200);
         while(feetech_sts.target_wing_angle != feetech_sts.latest_wing_angle){
