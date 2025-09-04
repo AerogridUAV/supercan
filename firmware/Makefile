@@ -1,7 +1,22 @@
 #BOARD ?= lisa_m2.0
 BOARD ?= supercan_v2.0
-BMP_PORT ?= $(shell ls /dev/bmp-gdb 2>/dev/null || echo /dev/ttyACM0)
-GDB ?= gdb-multiarch
+BMP_PORT ?= $(shell \
+    for dev in /dev/ttyACM*; do \
+        udevadm info -a -n $$dev | grep -q 'ATTRS{product}=="Black Magic Probe"' && echo $$dev; \
+    done | head -n1 \
+)
+
+# Default GDB
+GDB ?= gdb
+
+# Provide a convenience target to select gdb-multiarch.
+# Usage: make multiarch upload
+ifneq ($(filter multiarch,$(MAKECMDGOALS)),)
+GDB := gdb-multiarch
+.PHONY: multiarch
+multiarch:
+	@:
+endif
 
 all: bootloader node
 
