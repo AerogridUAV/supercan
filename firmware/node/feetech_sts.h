@@ -184,7 +184,7 @@ extern bool feetech_initialized;
 
 // ============================================================================
 // Main initialization and thread functions
-static THD_WORKING_AREA(feetech_serial_wa, 512);
+// static THD_WORKING_AREA(feetech_serial_wa, 512); // Removed: now using dynamic allocation
 static THD_FUNCTION(feetech_serial_thd, arg);
 
 void feetech_init_sequence(void);

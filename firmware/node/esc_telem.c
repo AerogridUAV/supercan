@@ -1,6 +1,7 @@
 #include "esc_telem.h"
 
 #include "config.h"
+#include "thread_utils.h"
 
 
 struct esc_telem_t esc_telem = {0};
@@ -8,7 +9,7 @@ static void esc_telem_parse_tmotorf(uint8_t msg[], uint8_t len);
 static void esc_telem_parse_tmotor_flame(uint8_t msg[], uint8_t len);
 static void esc_telem_parse_tmotor_alpha(uint8_t msg[], uint8_t len);
 
-static THD_WORKING_AREA(esc_telem_wa, 512);
+// static THD_WORKING_AREA(esc_telem_wa, 512); // Removed: using dynamic allocation
 static THD_FUNCTION(esc_telem_thd, arg) {
   (void)arg;
   chRegSetThreadName("esc_telem");
@@ -55,7 +56,7 @@ static void esc_telem_broadcast_status(void) {
   esc_telem.data.received = false;
 }
 
-static THD_WORKING_AREA(esc_telem_send_wa, 512);
+// static THD_WORKING_AREA(esc_telem_send_wa, 512); // Removed: using dynamic allocation
 static THD_FUNCTION(esc_telem_send_thd, arg) {
   (void)arg;
   chRegSetThreadName("esc_telem");
@@ -95,8 +96,8 @@ void esc_telem_init(void) {
     // Open the telemetry port and start the thread
     if(esc_telem.port != NULL) {
         uartStart(esc_telem.port, &esc_telem.uart_cfg);
-        chThdCreateStatic(esc_telem_wa, sizeof(esc_telem_wa), NORMALPRIO-5, esc_telem_thd, NULL);
-        chThdCreateStatic(esc_telem_send_wa, sizeof(esc_telem_send_wa), NORMALPRIO-6, esc_telem_send_thd, NULL);
+        CREATE_DYNAMIC_THREAD("esc_telem", 512, NORMALPRIO-5, esc_telem_thd, NULL);
+        CREATE_DYNAMIC_THREAD("esc_telem_send", 512, NORMALPRIO-6, esc_telem_send_thd, NULL);
     }
 }
 

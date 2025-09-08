@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <chprintf.h>
 #include <stm32f105xc.h>
+#include "thread_utils.h"
 
 
 struct feetech_sts_t feetech_sts = {0};
@@ -93,8 +94,8 @@ void feetech_sts_init(void) {
         
         feetech_init_sequence();
 
-        // Start serial thread (lower priority)
-        chThdCreateStatic(feetech_serial_wa, sizeof(feetech_serial_wa), NORMALPRIO-2, feetech_serial_thd, NULL);
+        // Start serial thread (lower priority) with dynamic allocation
+        CREATE_DYNAMIC_THREAD("feetech_serial", 512,  NORMALPRIO-2, feetech_serial_thd, NULL);
     }
 }
 

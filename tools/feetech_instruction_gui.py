@@ -444,7 +444,7 @@ class InstructionWidget(QtWidgets.QWidget):
                 cmd_text = f"Set Log Level {'Long' if value else 'Short'}"
             elif cmd_type == "ANGLE":
                 m.message_type = 1  # SET_TARGET_ANGLE
-                angle = int(value) & 0xFFFF
+                angle = int(value * 100) & 0xFFFF
                 data[0] = angle & 0xFF
                 data[1] = (angle >> 8) & 0xFF
                 cmd_text = f"Set Target Angle {value}°"
