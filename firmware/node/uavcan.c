@@ -5,23 +5,18 @@
 #include "config.h"
 #include "node.h"
 #include "servos.h"
+#include "thread_utils.h"
 #include <chprintf.h>
 
 #if STM32_CAN_USE_CAN1
-static THD_WORKING_AREA(can1_rx_wa, 1024*3);
-static THD_WORKING_AREA(can1_tx_wa, 1024*3);
-static THD_WORKING_AREA(can1_uavcan_wa, 2048*4);
 
 static struct uavcan_iface_t can1_iface = {
   .can_driver = &CAND1,
   .can_baudrate = 1000000,
   .can_cfg = { 0 },
-  .thread_rx_wa = can1_rx_wa,
-  .thread_rx_wa_size = sizeof(can1_rx_wa),
-  .thread_tx_wa = can1_tx_wa,
-  .thread_tx_wa_size = sizeof(can1_tx_wa),
-  .thread_uavcan_wa = can1_uavcan_wa,
-  .thread_uavcan_wa_size = sizeof(can1_uavcan_wa),
+  .thread_rx = NULL,
+  .thread_tx = NULL,
+  .thread_uavcan = NULL,
   .node_id = CANARD_BROADCAST_NODE_ID,
   .transmit_err_cnt = 0,
   .transmit_err_flush_cnt = 0
@@ -29,20 +24,14 @@ static struct uavcan_iface_t can1_iface = {
 #endif
 
 #if STM32_CAN_USE_CAN2
-static THD_WORKING_AREA(can2_rx_wa, 1024*3);
-static THD_WORKING_AREA(can2_tx_wa, 1024*3);
-static THD_WORKING_AREA(can2_uavcan_wa, 2048*4);
 
 static struct uavcan_iface_t can2_iface = {
   .can_driver = &CAND2,
   .can_baudrate = 1000000,
   .can_cfg = { 0 },
-  .thread_rx_wa = can2_rx_wa,
-  .thread_rx_wa_size = sizeof(can2_rx_wa),
-  .thread_tx_wa = can2_tx_wa,
-  .thread_tx_wa_size = sizeof(can2_tx_wa),
-  .thread_uavcan_wa = can2_uavcan_wa,
-  .thread_uavcan_wa_size = sizeof(can2_uavcan_wa),
+  .thread_rx = NULL,
+  .thread_tx = NULL,
+  .thread_uavcan = NULL,
   .node_id = CANARD_BROADCAST_NODE_ID,
   .transmit_err_cnt = 0,
   .transmit_err_flush_cnt = 0
@@ -729,9 +718,9 @@ static void uavcanInitIface(struct uavcan_iface_t *iface) {
   canStart(iface->can_driver, &iface->can_cfg);
 
   // Start the receiver and transmitter thread
-  chThdCreateStatic(iface->thread_rx_wa, iface->thread_rx_wa_size, NORMALPRIO + 8, can_rx, (void*)iface);
-  chThdCreateStatic(iface->thread_tx_wa, iface->thread_tx_wa_size, NORMALPRIO + 7, can_tx, (void*)iface);
-  chThdCreateStatic(iface->thread_uavcan_wa, iface->thread_uavcan_wa_size, NORMALPRIO + 6, uavcan_thrd, (void*)iface);
+  iface->thread_rx = CREATE_DYNAMIC_THREAD("can_rx", 1024*3, NORMALPRIO + 8, can_rx, (void*)iface);
+  iface->thread_tx = CREATE_DYNAMIC_THREAD("can_tx", 1024*3, NORMALPRIO + 7, can_tx, (void*)iface);
+  iface->thread_uavcan = CREATE_DYNAMIC_THREAD("uavcan", 2048*4, NORMALPRIO + 6, uavcan_thrd, (void*)iface);
 }
 
 /**
@@ -770,3 +759,53 @@ void uavcanInit(void) {
   uavcanInitIface(&can2_iface);
 #endif
 }
+
+
+// /**
+//  * Check if all UAVCAN threads are running for an interface
+//  * @param iface Pointer to UAVCAN interface
+//  * @return true if all threads are running, false otherwise
+//  */
+// bool uavcanThreadsRunning(struct uavcan_iface_t *iface) {
+//   if (iface == NULL) return false;
+  
+//   return (iface->thread_rx != NULL && 
+//           iface->thread_tx != NULL && 
+//           iface->thread_uavcan != NULL &&
+//           chThdTerminatedX(iface->thread_rx) == false &&
+//           chThdTerminatedX(iface->thread_tx) == false &&
+//           chThdTerminatedX(iface->thread_uavcan) == false);
+// }
+
+// /**
+//  * Terminate all UAVCAN threads for an interface
+//  * @param iface Pointer to UAVCAN interface
+//  */
+// void uavcanTerminateThreads(struct uavcan_iface_t *iface) {
+//   if (iface == NULL) return;
+  
+//   // Request termination of threads
+//   if (iface->thread_rx != NULL && chThdTerminatedX(iface->thread_rx) == false) {
+//     chThdTerminate(iface->thread_rx);
+//   }
+//   if (iface->thread_tx != NULL && chThdTerminatedX(iface->thread_tx) == false) {
+//     chThdTerminate(iface->thread_tx);
+//   }
+//   if (iface->thread_uavcan != NULL && chThdTerminatedX(iface->thread_uavcan) == false) {
+//     chThdTerminate(iface->thread_uavcan);
+//   }
+  
+//   // Wait for threads to terminate (with timeout)
+//   if (iface->thread_rx != NULL) {
+//     chThdWait(iface->thread_rx);
+//     iface->thread_rx = NULL;
+//   }
+//   if (iface->thread_tx != NULL) {
+//     chThdWait(iface->thread_tx);
+//     iface->thread_tx = NULL;
+//   }
+//   if (iface->thread_uavcan != NULL) {
+//     chThdWait(iface->thread_uavcan);
+//     iface->thread_uavcan = NULL;
+//   }
+// }

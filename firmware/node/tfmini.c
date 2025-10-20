@@ -1,5 +1,6 @@
 #include "tfmini.h"
 #include "config.h"
+#include "thread_utils.h"
 #include <math.h>
 
 struct tfmini_t tfmini = {0};
@@ -107,7 +108,6 @@ static void tfmini_parse(uint8_t byte)
   }
 }
 
-static THD_WORKING_AREA(tfmini_wa, 1024);
 static THD_FUNCTION(tfmini_thd, arg) {
   (void)arg;
   chRegSetThreadName("tfmini");
@@ -153,6 +153,6 @@ void tfmini_init(void) {
     if(tfmini.port != NULL) {
         tfmini.parse_status = TFMINI_PARSE_IDLE;
         uartStart(tfmini.port, &tfmini.uart_cfg);
-        chThdCreateStatic(tfmini_wa, sizeof(tfmini_wa), NORMALPRIO-10, tfmini_thd, NULL);
+        CREATE_DYNAMIC_THREAD("tfmini", 1024, NORMALPRIO-10, tfmini_thd, NULL);
     }
 }

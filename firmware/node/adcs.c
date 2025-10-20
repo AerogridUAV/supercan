@@ -5,6 +5,7 @@
 
 #include "adcs.h"
 #include "config.h"
+#include "thread_utils.h"
 
 static ADCConversionGroup adc1_group = {0};
 static adcsample_t adc_samples[ADC_MAX_CHANNELS * MAX_AV_NB_SAMPLE] = {0};
@@ -34,9 +35,7 @@ struct adc_ntc_t {
 };
 
 static struct adc_ntc_t ntc1;
-static THD_WORKING_AREA(ntc1_wa, 512);
 static struct adc_ntc_t ntc2;
-static THD_WORKING_AREA(ntc2_wa, 512);
 
 struct adc_power_t {
   uint8_t device_id;
@@ -56,9 +55,7 @@ struct adc_power_t {
 };
 
 static struct adc_power_t power1;
-static THD_WORKING_AREA(power1_wa, 512);
 static struct adc_power_t power2;
-static THD_WORKING_AREA(power2_wa, 512);
 
 struct potmeter_t {
   uint8_t channel;
@@ -72,9 +69,7 @@ struct potmeter_t {
 };
 
 static struct potmeter_t potmeter1;
-static THD_WORKING_AREA(potmeter1_wa, 512);
 static struct potmeter_t potmeter2;
-static THD_WORKING_AREA(potmeter2_wa, 512);
 
 
 /**
@@ -470,26 +465,26 @@ void adcs_init(void) {
 
   // Start POWER transmitting threads
   if(power1.frequency > 0) {
-    chThdCreateStatic(power1_wa, sizeof(power1_wa), NORMALPRIO-22, power_thread, (void*)&power1);
+    CREATE_DYNAMIC_THREAD("power1", 512, NORMALPRIO-22, power_thread, (void*)&power1);
   }
   if(power2.frequency > 0) {
-    chThdCreateStatic(power2_wa, sizeof(power2_wa), NORMALPRIO-22, power_thread, (void*)&power2);
+    CREATE_DYNAMIC_THREAD("power2", 512, NORMALPRIO-22, power_thread, (void*)&power2);
   }
 
   // Start NTC transmitting threads
   if(ntc1.frequency > 0) {
-    chThdCreateStatic(ntc1_wa, sizeof(ntc1_wa), NORMALPRIO-21, ntc_thread, (void*)&ntc1);
+    CREATE_DYNAMIC_THREAD("ntc1", 512, NORMALPRIO-21, ntc_thread, (void*)&ntc1);
   }
   if(ntc2.frequency > 0) {
-    chThdCreateStatic(ntc2_wa, sizeof(ntc2_wa), NORMALPRIO-21, ntc_thread, (void*)&ntc2);
+    CREATE_DYNAMIC_THREAD("ntc2", 512, NORMALPRIO-21, ntc_thread, (void*)&ntc2);
   }
 
   // Start POTMETER transmitting threads
   if(potmeter1.frequency > 0) {
-    chThdCreateStatic(potmeter1_wa, sizeof(potmeter1_wa), NORMALPRIO-20, potmeter_thread, (void*)&potmeter1);
+    CREATE_DYNAMIC_THREAD("potmeter1", 512, NORMALPRIO-20, potmeter_thread, (void*)&potmeter1);
   }
   if(potmeter2.frequency > 0) {
-    chThdCreateStatic(potmeter2_wa, sizeof(potmeter2_wa), NORMALPRIO-20, potmeter_thread, (void*)&potmeter2);
+    CREATE_DYNAMIC_THREAD("potmeter2", 512, NORMALPRIO-20, potmeter_thread, (void*)&potmeter2);
   }
 }
 

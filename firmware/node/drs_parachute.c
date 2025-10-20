@@ -1,5 +1,6 @@
 #include "drs_parachute.h"
 #include "config.h"
+#include "thread_utils.h"
 #include <ardupilotmega/mavlink.h>
 
 
@@ -65,7 +66,6 @@ static void mavlink_send_command_ack(uint16_t command, uint8_t result, uint8_t t
     mavlink_send(&message);
 }
 
-static THD_WORKING_AREA(drs_parachute_wa, 3072);
 static THD_FUNCTION(drs_parachute_thd, arg) {
   (void)arg;
   chRegSetThreadName("drs_parachute");
@@ -182,6 +182,6 @@ void drs_parachute_init(void) {
     // Open the telemetry port and start the thread
     if(drs_parachute.port != NULL) {
         uartStart(drs_parachute.port, &drs_parachute.uart_cfg);
-        chThdCreateStatic(drs_parachute_wa, sizeof(drs_parachute_wa), NORMALPRIO+3, drs_parachute_thd, NULL);
+        CREATE_DYNAMIC_THREAD("drs_parachute", 3072, NORMALPRIO+3, drs_parachute_thd, NULL);
     }
 }

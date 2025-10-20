@@ -35,12 +35,9 @@ struct uavcan_iface_t {
 
   event_source_t tx_request;
   mutex_t mutex;
-  void *thread_rx_wa;
-  void *thread_tx_wa;
-  void *thread_uavcan_wa;
-  size_t thread_rx_wa_size;
-  size_t thread_tx_wa_size;
-  size_t thread_uavcan_wa_size;
+  thread_t *thread_rx;
+  thread_t *thread_tx;
+  thread_t *thread_uavcan;
 
   uint8_t node_id;
   CanardInstance canard;
@@ -69,5 +66,9 @@ int uavcanBroadcastAll(uint64_t data_type_signature, uint16_t data_type_id,
 
 void uavcanDebug(uint8_t level, char *source, char *msg);
 void uavcanDebugIface(struct uavcan_iface_t *iface, uint8_t level, char *source, char *msg);
+
+// // Thread management functions
+// bool uavcanThreadsRunning(struct uavcan_iface_t *iface);
+// void uavcanTerminateThreads(struct uavcan_iface_t *iface);
 
 #endif /* UAVCAN_H */
