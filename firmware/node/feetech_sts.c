@@ -18,6 +18,7 @@ static uint8_t tid_config = 0;
 
 // Global initialization state
 bool feetech_initialized = false;
+bool endstop_reached = false;
 bool first_position_update = true;
 
 // ============================================================================
@@ -62,6 +63,10 @@ void feetech_sts_init(void) {
     feetech_sts.latest_error_code = 0;
     feetech_sts.latest_health_state = 0;
 
+    feetech_sts.config.physical_offset = -500;
+
+    feetech_sts.config.log_level = long_log_message;
+
     feetech_sts.safe_load = true;
 
     debug_msg.send = false;
@@ -91,7 +96,6 @@ void feetech_sts_init(void) {
     // Start UART and threads only if port is configured
     if(feetech_sts.port != NULL) {
         uartStart(feetech_sts.port, &feetech_sts.uart_cfg);
-        
         feetech_init_sequence();
 
         // Start serial thread (lower priority) with dynamic allocation
@@ -100,11 +104,11 @@ void feetech_sts_init(void) {
 }
 
 void feetech_init_sequence(void) {
-
-    unreach_endstop();
-
+    if(!palReadLine(SERVO1_LINE)) {
+        unreach_endstop();
+        chThdSleepMilliseconds(2000);
+    }
     feetech_setup_angle();
-
     reach_endstop();
 
     servo_update_status();
@@ -345,14 +349,16 @@ servo_response_t parse_servo_status(uint8_t *response, uint8_t length) {
 // HIGH-LEVEL SERVO CONTROL FUNCTIONS
 // ============================================================================
 void unreach_endstop(void) {
-    if(!palReadLine(SERVO1_LINE)) {
+    endstop_reached = true;
+    servo_update_status();
+    feetech_sts.target_wing_angle = 1500;
+    feetech_sts.target_servo_position = WingPositionToServoPosition(feetech_sts.target_wing_angle);
+    feetech_set_position(feetech_sts.target_servo_position, 200);
+    while(endstop_reached){
+        // Update status
         servo_update_status();
-        feetech_sts.target_wing_angle = feetech_sts.latest_wing_angle + 1000;
-        feetech_sts.target_servo_position = WingPositionToServoPosition(feetech_sts.target_wing_angle);
-        feetech_set_position(feetech_sts.target_servo_position, 200);
-        while(feetech_sts.target_wing_angle != feetech_sts.latest_wing_angle){
-            // Update status
-            servo_update_status();
+        if (feetech_sts.target_wing_angle - feetech_sts.latest_wing_angle < 5){
+            endstop_reached = false;
         }
     }
 }
@@ -366,7 +372,7 @@ void reach_endstop(void) {
     }
     feetech_sts.target_servo_position = feetech_sts.current_position_global;
     feetech_set_position(feetech_sts.target_servo_position, 200);
-    feetech_sts.calculation_offset = feetech_sts.current_position_global;
+    feetech_sts.calculation_offset = feetech_sts.current_position_global + WingPositionToServoPosition(feetech_sts.config.physical_offset);
     feetech_sts.target_wing_angle = ServoPositionToWingPosition(feetech_sts.target_servo_position);
 }
 

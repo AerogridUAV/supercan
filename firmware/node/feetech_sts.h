@@ -125,6 +125,7 @@ struct servo_config_t {
     uint8_t gear_ratio;
     uint16_t min_angle;
     uint16_t max_angle;
+    int16_t physical_offset;
     float serial_frequency;
     float can_frequency;
     loglevel_t log_level;
