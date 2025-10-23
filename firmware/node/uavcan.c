@@ -371,7 +371,7 @@ static THD_FUNCTION(uavcan_thrd, p) {
     strncat(msg, "; Bridge: None)", 89);
   uavcanDebugIface(iface, UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "UAVCAN", msg);
 
-  broadcast_servo_config(iface);
+  broadcast_servo_config_legacy(iface);
   broadcast_feetech_debug(iface);
 
   while(true) {

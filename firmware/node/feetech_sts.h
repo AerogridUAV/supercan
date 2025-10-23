@@ -186,7 +186,7 @@ extern bool feetech_initialized;
 // ============================================================================
 // Main initialization and thread functions
 // static THD_WORKING_AREA(feetech_serial_wa, 512); // Removed: now using dynamic allocation
-static THD_FUNCTION(feetech_serial_thd, arg);
+// static THD_FUNCTION(feetech_serial_thd, arg); // REMOVE THIS LINE - moved to .c file
 
 void feetech_init_sequence(void);
 void feetech_sts_init(void);
@@ -222,10 +222,13 @@ void feetech_disarm(void);
 void feetech_set_position(int16_t position, int16_t speed);
 void feetech_move_to_target(void);
 
+// Legacy UAVCAN interface functions
+void handle_can_servo_instruction_legacy(struct uavcan_iface_t *iface, CanardRxTransfer* transfer);
+void broadcast_feetech_status_legacy(struct uavcan_iface_t *iface);
+void broadcast_servo_config_legacy(struct uavcan_iface_t *iface);
+
 // UAVCAN interface functions
-void handle_can_servo_instruction(struct uavcan_iface_t *iface, CanardRxTransfer* transfer);
 void broadcast_feetech_status(struct uavcan_iface_t *iface);
-void broadcast_servo_config(struct uavcan_iface_t *iface);
 void broadcast_feetech_debug(struct uavcan_iface_t *iface);
 
 // Debugging functions

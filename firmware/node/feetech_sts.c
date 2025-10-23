@@ -16,6 +16,9 @@ static uint8_t tid_status = 0;
 static uint8_t tid_debug  = 0;
 static uint8_t tid_config = 0;
 
+// Thread function declaration
+static THD_FUNCTION(feetech_serial_thd, arg);
+
 // Global initialization state
 bool feetech_initialized = false;
 bool endstop_reached = false;
@@ -29,20 +32,19 @@ void feetech_sts_init(void) {
     // Load all configuration settings from config
     feetech_sts.index = config_get_by_name("FEETECH index", 0)->val.i;
     feetech_sts.servo_id = config_get_by_name("FEETECH id", 0)->val.i;
-    feetech_sts.uart_cfg.speed = config_get_by_name("FEETECH baudrate", 0)->val.i;
+    feetech_sts.uart_cfg.speed = 1000000;
     feetech_sts.uart_cfg.cr1 = USART_CR1_UE | USART_CR1_TE;
     feetech_sts.uart_cfg.cr3 = USART_CR3_HDSEL;
     
     // Load servo configuration from config
-    feetech_sts.config.gear_ratio = config_get_by_name("FEETECH gear ratio", 0)->val.i;
-    feetech_sts.config.max_speed = config_get_by_name("FEETECH max speed", 0)->val.i;
-    feetech_sts.config.can_frequency = config_get_by_name("FEETECH CAN frequency", 0)->val.f;
-    feetech_sts.config.serial_frequency = config_get_by_name("FEETECH serial frequency", 0)->val.f;
-    feetech_sts.config.load_threshold = config_get_by_name("FEETECH load threshold", 0)->val.i;
-    feetech_sts.config.log_level = feetech_get_log_level(config_get_by_name("FEETECH log level", 0)->val.i);
-    feetech_sts.config.min_angle = config_get_by_name("FEETECH min angle", 0)->val.i;
-    feetech_sts.config.max_angle = config_get_by_name("FEETECH max angle", 0)->val.i;
-    feetech_sts.config.max_speed = config_get_by_name("FEETECH max speed", 0)->val.i;
+    feetech_sts.config.gear_ratio = 9;
+    feetech_sts.config.max_speed = 0;
+    feetech_sts.config.can_frequency = 10;
+    feetech_sts.config.serial_frequency = 100;
+    feetech_sts.config.load_threshold = 130;
+    feetech_sts.config.log_level = long_log_message;
+    feetech_sts.config.min_angle = 0;
+    feetech_sts.config.max_angle = 9000;
 
     // Initialize control state
     feetech_sts.armed = true;
@@ -64,8 +66,6 @@ void feetech_sts_init(void) {
     feetech_sts.latest_health_state = 0;
 
     feetech_sts.config.physical_offset = -500;
-
-    feetech_sts.config.log_level = long_log_message;
 
     feetech_sts.safe_load = true;
 
@@ -423,16 +423,11 @@ servo_response_t servo_update_status(void) {
 }
 
 // ============================================================================
-// CONTROL STATE FUNCTIONS
-// ============================================================================
-
-
-// ============================================================================
-// UAVCAN INTERFACE FUNCTIONS
+// LEGACY UAVCAN INTERFACE FUNCTIONS
 // ============================================================================
 
 // Handle incoming servo instruction messages
-void handle_can_servo_instruction(struct uavcan_iface_t *iface, CanardRxTransfer* transfer) {
+void handle_can_servo_instruction_legacy(struct uavcan_iface_t *iface, CanardRxTransfer* transfer) {
     struct com_feetech_servo_Instruction instruction;
     
     if (com_feetech_servo_Instruction_decode(transfer, &instruction)) {
@@ -492,7 +487,7 @@ void handle_can_servo_instruction(struct uavcan_iface_t *iface, CanardRxTransfer
 }
 
 // Broadcast servo status
-void broadcast_feetech_status(struct uavcan_iface_t *iface) {
+void broadcast_feetech_status_legacy(struct uavcan_iface_t *iface) {
     if (feetech_sts.port == NULL) return;
 
     static uint8_t buffer[COM_FEETECH_SERVO_STATUS_MAX_SIZE > COM_FEETECH_SERVO_DEBUG_MAX_SIZE ?
@@ -560,7 +555,7 @@ void broadcast_feetech_status(struct uavcan_iface_t *iface) {
 }
 
 // Broadcast servo config
-void broadcast_servo_config(struct uavcan_iface_t *iface) {
+void broadcast_servo_config_legacy(struct uavcan_iface_t *iface) {
     if (feetech_sts.port == NULL) return;
     static uint8_t buffer[COM_FEETECH_SERVO_CONFIG_MAX_SIZE];
     struct com_feetech_servo_Config cfg = {0};
@@ -582,6 +577,30 @@ void broadcast_servo_config(struct uavcan_iface_t *iface) {
                     total);
 }
 
+// ============================================================================
+// UAVCAN INTERFACE FUNCTIONS
+// ============================================================================
+
+void broadcast_feetech_status(struct uavcan_iface_t *iface) {
+  // Set the values
+  struct uavcan_equipment_actuator_Status actuatorStatus;
+  actuatorStatus.actuator_id = feetech_sts.index;
+  actuatorStatus.position = (float)feetech_sts.latest_wing_angle * M_PI / 18000.0f; // Convert centidegrees to radians
+  actuatorStatus.speed = (float)feetech_sts.latest_servo_speed;
+  actuatorStatus.force = (float)feetech_sts.latest_load;
+
+  uint8_t buffer[UAVCAN_EQUIPMENT_ACTUATOR_STATUS_MAX_SIZE];
+  uint16_t total_size = uavcan_equipment_actuator_Status_encode(&actuatorStatus, buffer);
+
+  static uint8_t transfer_id;
+  uavcanBroadcastAll(
+      UAVCAN_EQUIPMENT_ACTUATOR_STATUS_SIGNATURE,
+      UAVCAN_EQUIPMENT_ACTUATOR_STATUS_ID, &transfer_id,
+      CANARD_TRANSFER_PRIORITY_LOW, buffer, total_size);
+
+}
+
+
 void broadcast_feetech_debug(struct uavcan_iface_t *iface) {
     if (debug_msg.send == true){
         uavcanDebugIface(iface, UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "FEETECH", debug_msg.message);
@@ -589,12 +608,35 @@ void broadcast_feetech_debug(struct uavcan_iface_t *iface) {
     }
 }
 
+
+// ============================================================================
+// DEBUGGING FUNCTIONS
+// ============================================================================
+
 void feetech_debug_message(const char *message) {
     if (feetech_sts.port == NULL) return;
 
     // Prepare debug message
     chsnprintf(debug_msg.message, sizeof(debug_msg.message), "%s", message);
     debug_msg.send = true;
+}
+
+void feetech_debug_status(void){
+    char status_msg[100];
+    chsnprintf(status_msg, 99, "A:%d CurA:%d TgtA:%d Off:%d CurP:%d TgtP:%d Spd:%d Ld:%d T:%d V:%d Err:%d H:%d",
+              feetech_sts.armed,
+              feetech_sts.latest_wing_angle,
+              feetech_sts.target_wing_angle,
+              feetech_sts.calculation_offset,
+              feetech_sts.latest_servo_position,
+              feetech_sts.target_servo_position,
+              feetech_sts.latest_servo_speed,
+              (uint8_t)((feetech_sts.latest_load >= 0 ? feetech_sts.latest_load : -feetech_sts.latest_load) / 10),
+              feetech_sts.latest_temperature,
+              feetech_sts.latest_voltage,
+              feetech_sts.latest_error_code,
+              feetech_sts.latest_health_state);
+    feetech_debug_message(status_msg);
 }
 
 // ============================================================================
@@ -662,24 +704,6 @@ void feetech_set_position(int16_t position, int16_t speed) {
 void feetech_move_to_target(void) {
     feetech_set_position(feetech_sts.target_servo_position, 
                          feetech_sts.config.max_speed);
-}
-
-void feetech_debug_status(void){
-    char status_msg[100];
-    chsnprintf(status_msg, 99, "A:%d CurA:%d TgtA:%d Off:%d CurP:%d TgtP:%d Spd:%d Ld:%d T:%d V:%d Err:%d H:%d",
-              feetech_sts.armed,
-              feetech_sts.latest_wing_angle,
-              feetech_sts.target_wing_angle,
-              feetech_sts.calculation_offset,
-              feetech_sts.latest_servo_position,
-              feetech_sts.target_servo_position,
-              feetech_sts.latest_servo_speed,
-              (uint8_t)((feetech_sts.latest_load >= 0 ? feetech_sts.latest_load : -feetech_sts.latest_load) / 10),
-              feetech_sts.latest_temperature,
-              feetech_sts.latest_voltage,
-              feetech_sts.latest_error_code,
-              feetech_sts.latest_health_state);
-    feetech_debug_message(status_msg);
 }
 
 int16_t local_to_global_position(int16_t revolution_count, int16_t local_position) {

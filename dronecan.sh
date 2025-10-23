@@ -17,4 +17,4 @@ sudo ifconfig can0 up
 dronecan_gui_tool &
 
 # Start Feetech Instruction GUI
-python3 tools/feetech_instruction_gui.py --iface can0 --node-id 100
+# python3 tools/feetech_instruction_gui.py --iface can0 --node-id 100

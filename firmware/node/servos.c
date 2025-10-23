@@ -66,6 +66,11 @@ static struct servos_t servos = {
   .initialized = false
 };
 
+static inline float esc_clamp(float val, float min, float max) {
+  val = val/819.0f * 1000.0f;
+  return val < min ? min : (val > max ? max : val);
+}
+
 static void servos_timeout_cb(virtual_timer_t *vtp __attribute__((unused)), void *p __attribute__((unused))) {
   // When no commands are received timeout and set everything to failsafe
   uint16_t servo_values[] = {
@@ -344,6 +349,13 @@ void handle_esc_rawcommand(struct uavcan_iface_t *iface __attribute__((unused)),
       drs_parachute_set(DRS_STATUS_DISABLE);
     else
       drs_parachute_set(DRS_STATUS_ENABLE);
+  }
+
+#include "feetech_sts.h"
+  if(feetech_sts.port != NULL && feetech_sts.index < msg.cmd.len) {
+    // Set the target wing angle (in centidegrees) clamped between min & max angle
+    feetech_sts.target_wing_angle = esc_clamp(msg.cmd.data[feetech_sts.index], feetech_sts.config.min_angle, feetech_sts.config.max_angle);
+    feetech_sts.target_servo_position = WingPositionToServoPosition(feetech_sts.target_wing_angle);
   }
 
   // Commit the commands
