@@ -190,12 +190,8 @@ CSRC = $(ALLCSRC) \
        $(DSDLC_SRC_DIR)/uavcan.equipment.power.BatteryInfo.c \
        $(DSDLC_SRC_DIR)/uavcan.equipment.power.CircuitStatus.c \
        $(DSDLC_SRC_DIR)/uavcan.equipment.fuelcell.Status.c \
-        $(DSDLC_SRC_DIR)/com.feetech.servo.Instruction.c \
-       $(DSDLC_SRC_DIR)/com.feetech.servo.Config.c \
-       $(DSDLC_SRC_DIR)/com.feetech.servo.Status.c \
-        $(DSDLC_SRC_DIR)/com.feetech.servo.Debug.c \
 	     flash.c config.c uavcan.c node.c servos.c esc_telem.c adcs.c \
-       faulhaber_ctrl.c drs_parachute.c tfmini.c ie_fuelcell.c feetech_sts.c \
+       faulhaber_ctrl.c drs_parachute.c tfmini.c ie_fuelcell.c rotmech.c \
        main.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global

@@ -5,7 +5,7 @@
 #include "config.h"
 #include "node.h"
 #include "servos.h"
-#include "feetech_sts.h"
+#include "rotmech.h"
 #include "thread_utils.h"
 #include <chprintf.h>
 
