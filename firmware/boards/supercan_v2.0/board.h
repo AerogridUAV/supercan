@@ -231,6 +231,7 @@ extern "C" {
   void board_init_servos(bool servos[], uint8_t cnt);
   void board_disable_servos(void);
   void board_set_servos(bool lock, uint16_t servos[], uint8_t cnt);
+  void board_set_servo_raw(uint8_t servo_num, uint16_t value);
 
 #ifdef __cplusplus
 }

@@ -351,12 +351,63 @@ void handle_esc_rawcommand(struct uavcan_iface_t *iface __attribute__((unused)),
       drs_parachute_set(DRS_STATUS_ENABLE);
   }
 
-#include "feetech_sts.h"
-  if(feetech_sts.port != NULL && feetech_sts.index < msg.cmd.len) {
+#include "rotmech.h"
+  if(rotmech.port != NULL && rotmech.index < msg.cmd.len) {
     // Set the target wing angle (in centidegrees) clamped between min & max angle
-    feetech_sts.target_wing_angle = esc_clamp(msg.cmd.data[feetech_sts.index], feetech_sts.config.min_angle, feetech_sts.config.max_angle);
-    feetech_sts.target_servo_position = WingPositionToServoPosition(feetech_sts.target_wing_angle);
+    rotmech.target_wing_angle = esc_clamp(msg.cmd.data[rotmech.index], rotmech.config.min_angle, rotmech.config.max_angle);
+    rotmech.target_servo_position = WingPositionToServoPosition(rotmech.target_wing_angle);
   }
+
+  #ifdef SERVO1_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 1) {
+    servo1_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO2_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 2) {
+    servo2_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO3_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 2) {
+    servo3_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO4_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 3) {
+    servo4_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO5_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 4) {
+    servo5_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO6_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 5) {
+    servo6_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO7_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 6) {
+    servo7_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO8_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 7) {
+    servo8_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO9_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 8) {
+    servo9_cmd = rotmech.pwm_output;
+  }
+#endif
+#ifdef SERVO10_LINE
+  if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 9) {
+    servo10_cmd = rotmech.pwm_output;
+  }
+#endif
 
   // Commit the commands
   uint16_t servo_values[] = {

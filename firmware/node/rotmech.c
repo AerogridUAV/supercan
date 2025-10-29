@@ -19,6 +19,7 @@ static uint8_t tid_config = 0;
 // Thread function declaration
 static THD_FUNCTION(small_rotmech_serial_thd, arg);
 static THD_FUNCTION(big_rotmech_serial_thd, arg);
+static THD_FUNCTION(rotmech_telem_thd, arg);
 
 // Global initialization state
 bool rotmech_initialized = false;
@@ -69,7 +70,6 @@ void common_rotmech_init(void) {
     rotmech.config.can_frequency = config_get_by_name("ROTMECH telem frequency", 0)->val.f;
 
     // Set servo configuration
-    rotmech.config.max_speed = 0;
     rotmech.config.serial_frequency = 100;
     rotmech.config.load_threshold = 130;
 
@@ -108,6 +108,10 @@ void small_rotmech_init(void) {
     rotmech.config.gear_ratio = 9;
     rotmech.config.physical_offset = -2310;
     rotmech.safe_load = true;
+    rotmech.config.init_speed = 2*config_get_by_name("ROTMECH init speed", 0)->val.i;
+    if (rotmech.config.init_speed == 0) {
+        rotmech.config.init_speed = 200; // Default init speed
+    }
 
     // Configure the port and pins
 
@@ -130,7 +134,7 @@ void small_rotmech_init(void) {
 }
 
 void small_rotmech_init_sequence(void) {
-    if(!palReadLine(rotmech.switch0_pin)) {
+    if(rotmech_is_0_switch_triggered()) {
         small_rotmech_unreach_endstop();
         chThdSleepMilliseconds(2000);
     }
@@ -155,6 +159,10 @@ void big_rotmech_init(void) {
     // TO BE CHANGED AFTER CALIBRATION
     rotmech.config.physical_offset = 0;
     rotmech.safe_load = true;
+    rotmech.config.init_speed = config_get_by_name("ROTMECH init speed", 0)->val.i;
+    if (rotmech.config.init_speed == 0) {
+        rotmech.config.init_speed = 100; // Default init speed
+    }
 
 
     // Encoder pins
@@ -170,6 +178,7 @@ void big_rotmech_init(void) {
 
     // ESC Pins
     if(rotmech.type == big_rotmech) {
+        rotmech.esc_port = 7-1; // SERVO7 is on port 6 (0-indexed) 
         rotmech.esc_pin = SERVO7_LINE;
         palSetLineMode(rotmech.esc_pin, PAL_MODE_INPUT_PULLUP);
     }
@@ -177,10 +186,6 @@ void big_rotmech_init(void) {
     // Start UART
     uartStart(rotmech.port, &rotmech.uart_cfg);
     
-    // Initialize PID and ESC for the controller
-    if (rotmech.type == big_rotmech) {
-        pid_init();
-    }
 
     // Start initialization sequence
     big_rotmech_init_sequence();
@@ -191,14 +196,22 @@ void big_rotmech_init(void) {
 }
 
 void big_rotmech_init_sequence(void) {
-    // if(!palReadLine(SERVO1_LINE)) {
-    //     big_rotmech_unreach_endstop();
-    //     chThdSleepMilliseconds(2000);
-    // }
-    // big_rotmech_setup_angle();
-    // big_rotmech_reach_endstop();
+    if (rotmech.type == big_rotmech) {
+        rotmech_set_esc_pwm(rotmech.pwm_output);
+        chThdSleepMilliseconds(3000);
+    }
+    if(rotmech_is_0_switch_triggered()) {
+        big_rotmech_unreach_endstop();
+        chThdSleepMilliseconds(2000);
+    }
+    big_rotmech_reach_endstop();
 
     servo_update_status();
+
+    // Initialize PID and ESC for the controller
+    if (rotmech.type == big_rotmech) {
+        pid_init();
+    }
 }
 
 // ============================================================================
@@ -227,7 +240,7 @@ static THD_FUNCTION(big_rotmech_serial_thd, arg) {
     if (rotmech.type == big_rotmech) {
         servo_update_status();
         pid_update();
-        servos_update_esc_output();
+        rotmech_set_esc_pwm(rotmech.pwm_output);
     } else {
         // Just update encoder position for big_rotmech_sensor
         servo_update_status();
@@ -243,7 +256,7 @@ static THD_FUNCTION(rotmech_telem_thd, arg) {
   chRegSetThreadName("rotmech_telem");
 
   while (true) {
-    rotmech_broadcast_status();
+    broadcast_rotmech_status();
     uint32_t sleeptime = 1000 / rotmech.config.can_frequency;
     chThdSleepMilliseconds(sleeptime);
   }
@@ -498,14 +511,14 @@ void request_servo_response(uint8_t read_address, uint8_t read_length) {
 void big_rotmech_unreach_endstop(void) {
     endstop_reached = true;
     servo_update_status();
-    rotmech.target_wing_angle = 1500; // Angle to move away from endstop
-    rotmech.target_servo_position = WingPositionToServoPosition(rotmech.target_wing_angle);
-    // Move away from endstop for 5 seconds at LOW speed
-    uint32_t start_time = chVTGetSystemTime();
-    while(endstop_reached && (chVTGetSystemTime() - start_time) < TIME_MS2I(5000)){
+    if (rotmech.type == big_rotmech) {
+        uint16_t speed = rotmech.pid.output_zero - rotmech.config.init_speed;
+        rotmech_set_esc_pwm(speed);
+    }
+    while(endstop_reached){
         // Update status
         servo_update_status();
-        if (rotmech.target_wing_angle - rotmech.latest_wing_angle < 5){
+        if (!rotmech_is_0_switch_triggered()){
             endstop_reached = false;
         }
     }
@@ -514,12 +527,15 @@ void big_rotmech_unreach_endstop(void) {
 
 void big_rotmech_reach_endstop(void) {
     // Move clockwise until endstop is reached
-    while(palReadLine(rotmech.switch0_pin) & rotmech.safe_load) {
+    if (rotmech.type == big_rotmech) {
+        uint16_t speed = rotmech.pid.output_zero + rotmech.config.init_speed;
+        rotmech_set_esc_pwm(speed);
+    }
+    while(!rotmech_is_0_switch_triggered()) {
         // Update status
         servo_update_status();
     }
     rotmech.target_servo_position = rotmech.current_position_global;
-    big_rotmech_set_position(rotmech.target_servo_position, 200);
     rotmech.calculation_offset = rotmech.current_position_global + WingPositionToServoPosition(rotmech.config.physical_offset);
     rotmech.target_wing_angle = ServoPositionToWingPosition(rotmech.target_servo_position);
 }
@@ -566,7 +582,7 @@ servo_response_t servo_update_status(void) {
 // UAVCAN INTERFACE FUNCTIONS
 // ============================================================================
 
-void broadcast_feetech_status(void) {
+void broadcast_rotmech_status(void) {
   // Set the values
   struct uavcan_equipment_actuator_Status actuatorStatus;
   actuatorStatus.actuator_id = rotmech.index;
@@ -682,8 +698,7 @@ void small_rotmech_set_position(int16_t position, int16_t speed) {
 }
 
 void small_rotmech_move_to_target(void) {
-    small_rotmech_set_position(rotmech.target_servo_position, 
-                         rotmech.config.max_speed);
+    small_rotmech_set_position(rotmech.target_servo_position, 0);
 }
 
 int16_t local_to_global_position(int16_t revolution_count, int16_t local_position) {
@@ -755,8 +770,8 @@ void pid_init(void) {
     rotmech.pid.output_zero = 1500.0f;
     
     // Hardcoded output limits
-    rotmech.pid.output_min = 1250.0f;
-    rotmech.pid.output_max = 1750.0f;
+    rotmech.pid.output_min = 1400.0f;
+    rotmech.pid.output_max = 1600.0f;
     
     // Hardcoded integral limits (anti-windup)
     rotmech.pid.integral_min = -100.0f;
@@ -869,22 +884,41 @@ void pid_set_gains(float kp, float ki, float kd) {
 /**
  * @brief Update PID output limits
  */
-void pid_set_output_limits(float min, float max) {
-    rotmech.pid.output_min = min;
-    rotmech.pid.output_max = max;
+void pid_set_output_limits(float range) {
+    rotmech.pid.output_min = rotmech.pid.output_zero - range;
+    rotmech.pid.output_max = rotmech.pid.output_zero + range;
 }
 
 /**
  * @brief Update PID integral limits (anti-windup)
  */
-void pid_set_integral_limits(float min, float max) {
-    rotmech.pid.integral_min = min;
-    rotmech.pid.integral_max = max;
-    
+void pid_set_integral_limits(float limit) {
+    rotmech.pid.integral_min = -limit;
+    rotmech.pid.integral_max = limit;
+
     // Clamp current integral if needed
-    if (rotmech.pid.integral > max) {
-        rotmech.pid.integral = max;
-    } else if (rotmech.pid.integral < min) {
-        rotmech.pid.integral = min;
+    if (rotmech.pid.integral > limit) {
+        rotmech.pid.integral = limit;
+    } else if (rotmech.pid.integral < -limit) {
+        rotmech.pid.integral = -limit;
+    }
+}
+
+bool rotmech_is_0_switch_triggered(void) {
+    if (rotmech.port == NULL) return false;
+
+    return !palReadLine(rotmech.switch0_pin);
+}
+
+bool rotmech_is_90_switch_triggered(void) {
+    if (rotmech.port == NULL) return false;
+
+    return !palReadLine(rotmech.switch90_pin);
+}
+
+void rotmech_set_esc_pwm(uint16_t value) {
+    if (rotmech.type == big_rotmech) {
+        board_set_servo_raw(rotmech.esc_port, value);
+        rotmech_debug_message("ESC PWM set");
     }
 }

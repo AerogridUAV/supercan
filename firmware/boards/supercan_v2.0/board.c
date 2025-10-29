@@ -258,4 +258,43 @@ void board_set_servos(bool lock, uint16_t servos[], uint8_t cnt) {
     osalSysUnlock();
   }
 }
+
+void board_set_servo_raw(uint8_t servo_num, uint16_t value) {
+  osalSysLock();
+  
+  switch(servo_num) {
+    case 0:
+      if(servo_enabled[0]) pwmEnableChannelI(&PWMD5, 3, value);
+      break;
+    case 1:
+      if(servo_enabled[1]) pwmEnableChannelI(&PWMD5, 0, value);
+      break;
+    case 2:
+      if(servo_enabled[2]) pwmEnableChannelI(&PWMD1, 2, value);
+      break;
+    case 3:
+      if(servo_enabled[3]) pwmEnableChannelI(&PWMD2, 3, value);
+      break;
+    case 4:
+      if(servo_enabled[4]) pwmEnableChannelI(&PWMD5, 2, value);
+      break;
+    case 5:
+      if(servo_enabled[5]) pwmEnableChannelI(&PWMD1, 1, value);
+      break;
+    case 6:
+      if(servo_enabled[6]) pwmEnableChannelI(&PWMD2, 2, value);
+      break;
+    case 7:
+      if(servo_enabled[7]) pwmEnableChannelI(&PWMD3, 0, value);
+      break;
+    case 8:
+      if(servo_enabled[8]) pwmEnableChannelI(&PWMD3, 1, value);
+      break;
+    case 9:
+      if(servo_enabled[9]) pwmEnableChannelI(&PWMD2, 1, value);
+      break;
+  }
+  
+  osalSysUnlock();
+}
 #endif

@@ -128,7 +128,7 @@ struct controller_config_t
     int16_t physical_offset;    ///< Physical offset in centidegrees
     float serial_frequency;     ///< Serial communication frequency
     float can_frequency;        ///< CAN communication frequency
-    uint16_t max_speed;         ///< Maximum speed
+    uint16_t init_speed;        ///< Initialization speed
     uint32_t load_threshold;    ///< Load threshold
 
     float pid_kp;               ///< PID proportional gain
@@ -175,6 +175,7 @@ struct rotmech_t
     UARTConfig uart_cfg;       ///< UART configuration
     uint8_t index;             ///< Rotation mechanism actuator index
     uint8_t servo_id;          ///< Servo ID
+    uint8_t esc_port;          ///< ESC servo port
     ioline_t esc_pin;          ///< ESC control pin
     ioline_t switch0_pin;      ///< 0 Degree Wing Switch pin
     ioline_t switch90_pin;     ///< 90 Degree Wing Switch pin
@@ -258,6 +259,9 @@ servo_response_t servo_update_status(void);
 void small_rotmech_unreach_endstop(void);
 void small_rotmech_reach_endstop(void);
 
+void big_rotmech_unreach_endstop(void);
+void big_rotmech_reach_endstop(void);
+
 // Configuration functions
 void small_rotmech_setup_angle(void);
 
@@ -285,7 +289,11 @@ void pid_init(void);
 void pid_update(void);
 void pid_reset(void);
 void pid_set_gains(float kp, float ki, float kd);
-void pid_set_output_limits(float min, float max);
-void pid_set_integral_limits(float min, float max);
+void pid_set_output_limits(float range);
+void pid_set_integral_limits(float limit);
+
+bool rotmech_is_0_switch_triggered(void);
+bool rotmech_is_90_switch_triggered(void);
+void rotmech_set_esc_pwm(uint16_t value);
 
 #endif /* ROTMECH_H */
