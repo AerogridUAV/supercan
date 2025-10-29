@@ -9,17 +9,6 @@
 #include "thread_utils.h"
 #include <chprintf.h>
 
-// Fallback for UID_BASE in case MCU headers don't provide it
-#ifndef UID_BASE
-#if defined(STM32F1XX) || defined(STM32F1)
-#define UID_BASE 0x1FFFF7E8UL
-#elif defined(STM32F4XX) || defined(STM32F4)
-#define UID_BASE 0x1FFF7A10UL
-#else
-#define UID_BASE 0x1FFFF7E8UL
-#endif
-#endif
-
 #if STM32_CAN_USE_CAN1
 // Static working areas converted to dynamic allocation
 // static THD_WORKING_AREA(can1_rx_wa, 1024*3);
@@ -194,7 +183,7 @@ static THD_FUNCTION(can_rx, p) {
     if (chEvtWaitAnyTimeout(ALL_EVENTS, TIME_MS2I(100)) == 0)
       continue;
 
-    // Wait untial a CAN message is received
+    // Wait until a CAN message is received
     while (canReceive(iface->can_driver, CAN_ANY_MAILBOX, &rx_msg, TIME_IMMEDIATE) == MSG_OK) {
       // Process message.
       const uint32_t timestamp = TIME_I2US(chVTGetSystemTimeX());
@@ -283,9 +272,6 @@ static THD_FUNCTION(uavcan_thrd, p) {
 
   // Try to get a Node ID
   uint8_t node_id_allocation_transfer_id = 0;
-  // If no allocator present, fall back after timeout to a deterministic UID-derived Node-ID
-  uint32_t dyn_start_ms = TIME_I2MS(chVTGetSystemTimeX());
-  const uint32_t dyn_timeout_ms = 5000; // 5 seconds
   while(canardGetLocalNodeID(&iface->canard) == CANARD_BROADCAST_NODE_ID) {
     iface->send_next_node_id_allocation_request_at_ms =
       TIME_I2MS(chVTGetSystemTimeX()) + UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_MIN_REQUEST_PERIOD_MS +
@@ -315,9 +301,9 @@ static THD_FUNCTION(uavcan_thrd, p) {
       allocation_request[0] |= 1;     // First part of unique ID
     }
 
-  // Obtaining the local unique ID
-  uint8_t my_unique_id[16] = {0};
-  memcpy(my_unique_id, (void *)UID_BASE, 12);
+    // Obtaining the local unique ID
+    uint8_t my_unique_id[16] = {0};
+    memcpy(my_unique_id, (void *)UID_BASE, 12);
 
     static const uint8_t MaxLenOfUniqueIDInRequest = 6;
     uint8_t uid_size = (uint8_t)(16 - iface->node_id_allocation_unique_id_offset);
@@ -344,47 +330,28 @@ static THD_FUNCTION(uavcan_thrd, p) {
 
     // Preparing for timeout; if response is received, this value will be updated from the callback.
     iface->node_id_allocation_unique_id_offset = 0;
-
-    // Timeout fallback logic
-    if ((TIME_I2MS(chVTGetSystemTimeX()) - dyn_start_ms) > dyn_timeout_ms) {
-      uint16_t acc = 0;
-      for (int i = 0; i < 16; i++) {
-        acc = (uint16_t)(acc * 131u + my_unique_id[i]);
-      }
-      uint8_t fallback_id = (uint8_t)(1 + (acc % 120)); // 1..120, avoid upper reserved space
-      iface->node_id = fallback_id;
-      canardSetLocalNodeID(&iface->canard, fallback_id);
-      uavcanDebugIface(iface, UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "UAVCAN",
-                       "Dynamic alloc timeout; using fallback Node-ID");
-      break;
-    }
   }
 
   /* Print debug information */
   char msg[90];
   chsnprintf(msg, 89, "Node ID: %d (Term CAN1: %d, CAN2: %d", iface->node_id, can_termination & 0x1, (can_termination & 0x2) >> 1);
   if(uavcan_bridge == UAVCAN_BRIDGE_CAN1TOCAN2)
-    strncat(msg, "; Bridge: CAN1 -> CAN2)", 89);
+  strncat(msg, "; Bridge: CAN1 -> CAN2)", 89);
   else if(uavcan_bridge == UAVCAN_BRIDGE_CAN2TOCAN1)
-    strncat(msg, "; Bridge: CAN2 -> CAN1)", 89);
+  strncat(msg, "; Bridge: CAN2 -> CAN1)", 89);
   else
-    strncat(msg, "; Bridge: None)", 89);
+  strncat(msg, "; Bridge: None)", 89);
   uavcanDebugIface(iface, UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "UAVCAN", msg);
-
-  broadcast_servo_config_legacy(iface);
-  broadcast_feetech_debug(iface);
-
+  
   while(true) {
-    broadcast_feetech_debug(iface);
+    broadcast_rotmech_debug(iface);
     broadcast_node_status(iface);
-    broadcast_feetech_status(iface);
 
     chMtxLock(&iface->mutex);
     canardCleanupStaleTransfers(&iface->canard, TIME_I2MS(chVTGetSystemTimeX()));
     chMtxUnlock(&iface->mutex);
 
-    uint32_t sleeptime = 1000 / feetech_sts.config.can_frequency;
-    chThdSleepMilliseconds(sleeptime);
+    chThdSleepMilliseconds(500);
   }
 }
 
@@ -427,8 +394,7 @@ static void handle_allocation_response(struct uavcan_iface_t *iface, CanardRxTra
     //printf("Matching allocation response: %d\n", received_unique_id_len);
   } else {
     // Allocation complete - copying the allocated node ID from the message
-  iface->node_id = msg.node_id;
-  canardSetLocalNodeID(&iface->canard, msg.node_id);
+    canardSetLocalNodeID(&iface->canard, msg.node_id);
     //printf("Node ID allocated: %d\n", allocated_node_id);
   }
 }
@@ -498,15 +464,6 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
     case UAVCAN_PROTOCOL_RESTARTNODE_ID:
       *out_data_type_signature = UAVCAN_PROTOCOL_RESTARTNODE_SIGNATURE;
       return true;
-    case COM_FEETECH_SERVO_INSTRUCTION_ID:
-      *out_data_type_signature = COM_FEETECH_SERVO_INSTRUCTION_SIGNATURE;
-      return true;
-    case COM_FEETECH_SERVO_CONFIG_ID:
-      *out_data_type_signature = COM_FEETECH_SERVO_CONFIG_SIGNATURE;
-      return true;
-    case COM_FEETECH_SERVO_STATUS_ID:
-      *out_data_type_signature = COM_FEETECH_SERVO_STATUS_SIGNATURE;
-      return true;
   }
   
   return false;
@@ -557,9 +514,6 @@ static void onTransferReceived(CanardInstance* ins, CanardRxTransfer* transfer)
     case UAVCAN_PROTOCOL_RESTARTNODE_ID:
       servos_disable();
       NVIC_SystemReset();
-      break;
-    case COM_FEETECH_SERVO_INSTRUCTION_ID:
-      handle_can_servo_instruction(iface, transfer);
       break;
   }
 
@@ -765,16 +719,9 @@ static void uavcanInitIface(struct uavcan_iface_t *iface) {
     onTransferReceived, shouldAcceptTransfer, iface);
 
   // Set the node ID from the config
-  {
-    uint8_t cfg_id = (uint8_t)config_get_by_name("NODE id", 0)->val.i;
-    // Valid static Node-ID range is 1..127; 0 means dynamic allocation
-    if (cfg_id >= 1 && cfg_id <= 127) {
-      iface->node_id = cfg_id;
-      canardSetLocalNodeID(&iface->canard, iface->node_id);
-    } else {
-      iface->node_id = CANARD_BROADCAST_NODE_ID; // request dynamic or fallback later
-    }
-  }
+  iface->node_id = config_get_by_name("NODE id", 0)->val.i;
+  if(iface->node_id != CANARD_BROADCAST_NODE_ID)
+    canardSetLocalNodeID(&iface->canard, iface->node_id);
 
   // Start the can interface
   canStart(iface->can_driver, &iface->can_cfg);
