@@ -111,6 +111,11 @@ static void servos_timeout_cb(virtual_timer_t *vtp __attribute__((unused)), void
 void servos_init(void) {
   servos.node_timeout = config_get_by_name("SERVO failsafe timeout (ms)", 0)->val.i;
 
+  // Check if rotmech needs an ESC port
+  uint8_t rotmech_type = config_get_by_name("ROTMECH type", 0)->val.i;
+  uint8_t rotmech_esc_port = config_get_by_name("ROTMECH esc port", 0)->val.i;
+  bool rotmech_needs_esc = (rotmech_type == 1 && rotmech_esc_port > 0);
+
   // Read the servo settings
 #ifdef SERVO1_LINE
   servos.servo1_idx = config_get_by_name("SERVO1 index", 0)->val.i;
@@ -196,34 +201,34 @@ void servos_init(void) {
   // Initialize the servos which are used
   bool servos_enable[] = {
 #ifdef SERVO1_LINE
-    (servos.servo1_idx != 255),
+    (servos.servo1_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 1),
 #endif
 #ifdef SERVO2_LINE
-    (servos.servo2_idx != 255),
+    (servos.servo2_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 2),
 #endif
 #ifdef SERVO3_LINE
-    (servos.servo3_idx != 255),
+    (servos.servo3_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 3),
 #endif
 #ifdef SERVO4_LINE
-    (servos.servo4_idx != 255),
+    (servos.servo4_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 4),
 #endif
 #ifdef SERVO5_LINE
-    (servos.servo5_idx != 255),
+    (servos.servo5_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 5),
 #endif
 #ifdef SERVO6_LINE
-    (servos.servo6_idx != 255),
+    (servos.servo6_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 6),
 #endif
 #ifdef SERVO7_LINE
-    (servos.servo7_idx != 255),
+    (servos.servo7_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 7),
 #endif
 #ifdef SERVO8_LINE
-    (servos.servo8_idx != 255),
+    (servos.servo8_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 8),
 #endif
 #ifdef SERVO9_LINE
-    (servos.servo9_idx != 255),
+    (servos.servo9_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 9),
 #endif
 #ifdef SERVO10_LINE
-    (servos.servo10_idx != 255),
+    (servos.servo10_idx != 255) || (rotmech_needs_esc && rotmech_esc_port == 10),
 #endif
   };
   board_init_servos(servos_enable, sizeof(servos_enable) / sizeof(bool));

@@ -167,10 +167,8 @@ void big_rotmech_init(void) {
     palSetLineMode(rotmech.switch90_pin, PAL_MODE_INPUT_PULLUP);
 
     // ESC Pins
-    if(rotmech.type == big_rotmech) {
-        rotmech.esc_port = 7-1; // SERVO7 is on port 6 (0-indexed) 
-        rotmech.esc_pin = SERVO7_LINE;
-        palSetLineMode(rotmech.esc_pin, PAL_MODE_INPUT_PULLUP);
+    if(rotmech.type == big_rotmech) {        
+        rotmech.esc_port = config_get_by_name("ROTMECH esc port", 0)->val.i;
     }
 
     // Start UART
@@ -182,13 +180,16 @@ void big_rotmech_init(void) {
     }
 
     // WAIT UNTIL SERVOS ARE INITIALIZED
+    while(!board_servos_initialized()) {
+        chThdSleepMilliseconds(100);
+    }
 
     // Start initialization sequence
     big_rotmech_init_sequence();
 
     // Start serial thread (lower priority) with dynamic allocation
     CREATE_DYNAMIC_THREAD("big_rotmech_serial", 512,  NORMALPRIO-2, big_rotmech_serial_thd, NULL);
-    CREATE_DYNAMIC_THREAD("rotmech_telem", 256, NORMALPRIO-6, rotmech_telem_thd, NULL);
+    // CREATE_DYNAMIC_THREAD("rotmech_telem", 256, NORMALPRIO-6, rotmech_telem_thd, NULL);
 }
 
 void big_rotmech_init_sequence(void) {
@@ -222,7 +223,7 @@ static THD_FUNCTION(small_rotmech_serial_thd, arg) {
 static THD_FUNCTION(big_rotmech_serial_thd, arg) {
     (void)arg;
     chRegSetThreadName("big_rotmech_serial");
-
+    while (true) {
     // Only run PID control for big_rotmech (not big_rotmech_sensor)
     if (rotmech.type == big_rotmech) {
         servo_update_status();
@@ -236,6 +237,7 @@ static THD_FUNCTION(big_rotmech_serial_thd, arg) {
     // Sleep based on configured serial frequency
     uint32_t period_ms = (uint32_t)(1000.0f / rotmech.config.serial_frequency);
     chThdSleepMilliseconds(period_ms);
+    }
 }
 
 static THD_FUNCTION(rotmech_telem_thd, arg) {

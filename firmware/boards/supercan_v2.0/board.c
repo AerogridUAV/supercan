@@ -73,6 +73,7 @@ static bool servo_enabled[10] = {
   false,
   false
 };
+static bool servos_hw_initialized = false;
 
 static PWMConfig pwmcfg_tim1 = {
   1000000,                                  /* 1MHz PWM clock frequency.      */
@@ -199,6 +200,7 @@ void board_init_servos(bool servos[], uint8_t cnt) {
   if(servo_enabled[0] || servo_enabled[1] || servo_enabled[4]) {
     pwmStart(&PWMD5, &pwmcfg_tim5);
   }
+  servos_hw_initialized = true;
 }
 
 void board_disable_servos(void) {
@@ -261,8 +263,9 @@ void board_set_servos(bool lock, uint16_t servos[], uint8_t cnt) {
 
 void board_set_servo_raw(uint8_t servo_num, uint16_t value) {
   osalSysLock();
-  
-  switch(servo_num) {
+
+  // Servo numbers are 1-indexed, so subtract 1 for 0-indexed channels
+  switch(servo_num - 1) {
     case 0:
       if(servo_enabled[0]) pwmEnableChannelI(&PWMD5, 3, value);
       break;
@@ -296,5 +299,9 @@ void board_set_servo_raw(uint8_t servo_num, uint16_t value) {
   }
   
   osalSysUnlock();
+}
+
+bool board_servos_initialized(void) {
+  return servos_hw_initialized;
 }
 #endif
