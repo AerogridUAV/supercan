@@ -6,15 +6,9 @@
 #include <chprintf.h>
 #include <stm32f105xc.h>
 #include "thread_utils.h"
-
+#include <stdarg.h>
 
 struct rotmech_t rotmech = {0};
-struct debug_message_t debug_msg = {0};
-
-// Add per-message transfer IDs
-static uint8_t tid_status = 0;
-static uint8_t tid_debug  = 0;
-static uint8_t tid_config = 0;
 
 // Thread function declaration
 static THD_FUNCTION(small_rotmech_serial_thd, arg);
@@ -91,10 +85,6 @@ void common_rotmech_init(void) {
     rotmech.latest_temperature = 0;
     rotmech.latest_error_code = 0;
     rotmech.latest_health_state = 0;
-
-    // Initialize debug message
-    debug_msg.send = false;
-    debug_msg.message[0] = '\0';
 }
 
 /**
@@ -185,7 +175,13 @@ void big_rotmech_init(void) {
 
     // Start UART
     uartStart(rotmech.port, &rotmech.uart_cfg);
-    
+
+    // Initialize PID and arm ESC for the controller
+    if (rotmech.type == big_rotmech) {
+        pid_init();
+    }
+
+    // WAIT UNTIL SERVOS ARE INITIALIZED
 
     // Start initialization sequence
     big_rotmech_init_sequence();
@@ -196,10 +192,6 @@ void big_rotmech_init(void) {
 }
 
 void big_rotmech_init_sequence(void) {
-    if (rotmech.type == big_rotmech) {
-        rotmech_set_esc_pwm(rotmech.pwm_output);
-        chThdSleepMilliseconds(3000);
-    }
     if(rotmech_is_0_switch_triggered()) {
         big_rotmech_unreach_endstop();
         chThdSleepMilliseconds(2000);
@@ -207,11 +199,6 @@ void big_rotmech_init_sequence(void) {
     big_rotmech_reach_endstop();
 
     servo_update_status();
-
-    // Initialize PID and ESC for the controller
-    if (rotmech.type == big_rotmech) {
-        pid_init();
-    }
 }
 
 // ============================================================================
@@ -601,43 +588,40 @@ void broadcast_rotmech_status(void) {
 
 }
 
-
-void broadcast_rotmech_debug(struct uavcan_iface_t *iface) {
-    if (debug_msg.send == true){
-        uavcanDebugIface(iface, UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "ROTMECH", debug_msg.message);
-        debug_msg.send = false;
-    }
-}
-
-
 // ============================================================================
 // DEBUGGING FUNCTIONS
 // ============================================================================
 
-void rotmech_debug_message(const char *message) {
+void rotmech_debug_message(const char *fmt, ...) {
     if (rotmech.port == NULL) return;
 
-    // Prepare debug message
-    chsnprintf(debug_msg.message, sizeof(debug_msg.message), "%s", message);
-    debug_msg.send = true;
+    char buffer[128];  // adjust size as needed
+    va_list args;
+    va_start(args, fmt);
+    chvsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    uavcanDebug(UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "ROTMECH", buffer);
 }
 
-void rotmech_debug_status(void){
-    char status_msg[100];
-    chsnprintf(status_msg, 99, "A:%d CurA:%d TgtA:%d Off:%d CurP:%d TgtP:%d Spd:%d Ld:%d T:%d V:%d Err:%d H:%d",
-              rotmech.armed,
-              rotmech.latest_wing_angle,
-              rotmech.target_wing_angle,
-              rotmech.calculation_offset,
-              rotmech.latest_servo_position,
-              rotmech.target_servo_position,
-              rotmech.latest_servo_speed,
-              (uint8_t)((rotmech.latest_load >= 0 ? rotmech.latest_load : -rotmech.latest_load) / 10),
-              rotmech.latest_temperature,
-              rotmech.latest_voltage,
-              rotmech.latest_error_code,
-              rotmech.latest_health_state);
-    rotmech_debug_message(status_msg);
+void rotmech_debug_status(void) {
+    rotmech_debug_message(
+        "A:%d CurA:%d TgtA:%d Off:%d CurP:%d TgtP:%d Spd:%d Ld:%d "
+        "T:%d V:%d Err:%d H:%d",
+        rotmech.armed,
+        rotmech.latest_wing_angle,
+        rotmech.target_wing_angle,
+        rotmech.calculation_offset,
+        rotmech.latest_servo_position,
+        rotmech.target_servo_position,
+        rotmech.latest_servo_speed,
+        (uint8_t)((rotmech.latest_load >= 0 ? rotmech.latest_load 
+                   : -rotmech.latest_load) / 10),
+        rotmech.latest_temperature,
+        rotmech.latest_voltage,
+        rotmech.latest_error_code,
+        rotmech.latest_health_state
+    );
 }
 
 // ============================================================================
@@ -919,6 +903,7 @@ bool rotmech_is_90_switch_triggered(void) {
 void rotmech_set_esc_pwm(uint16_t value) {
     if (rotmech.type == big_rotmech) {
         board_set_servo_raw(rotmech.esc_port, value);
-        rotmech_debug_message("ESC PWM set");
+        rotmech_debug_message("ESC PWM set to %d", value);
+        rotmech_debug_status();
     }
 }

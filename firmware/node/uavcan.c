@@ -344,7 +344,6 @@ static THD_FUNCTION(uavcan_thrd, p) {
   uavcanDebugIface(iface, UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "UAVCAN", msg);
   
   while(true) {
-    broadcast_rotmech_debug(iface);
     broadcast_node_status(iface);
 
     chMtxLock(&iface->mutex);

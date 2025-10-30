@@ -213,18 +213,11 @@ struct rotmech_t
     bool safe_load;
 };
 
-struct debug_message_t
-{
-    bool send;                 ///< Whether to send debug message
-    char message[100];         ///< Buffer containing the debug message
-};
-
 // ============================================================================
 // GLOBAL VARIABLES
 // ============================================================================
 
 extern struct rotmech_t rotmech;
-extern struct debug_message_t debug_msg;
 extern bool rotmech_initialized;
 
 // ============================================================================
@@ -272,10 +265,9 @@ void small_rotmech_move_to_target(void);
 
 // UAVCAN interface functions
 void broadcast_rotmech_status(void);
-void broadcast_rotmech_debug(struct uavcan_iface_t *iface);
 
 // Debugging functions
-void rotmech_debug_message(const char *message);
+void rotmech_debug_message(const char *fmt, ...);
 void rotmech_debug_status(void);
 
 // Position calculation functions
