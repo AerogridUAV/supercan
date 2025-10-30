@@ -59,6 +59,7 @@ void boardInit(void) {
 
     AFIO->MAPR = mapr;
 }
+static volatile bool servos_hw_initialized = false; 
 
 #if HAL_USE_PWM
 static bool servo_enabled[10] = {
@@ -73,7 +74,6 @@ static bool servo_enabled[10] = {
   false,
   false
 };
-static bool servos_hw_initialized = false;
 
 static PWMConfig pwmcfg_tim1 = {
   1000000,                                  /* 1MHz PWM clock frequency.      */
@@ -300,8 +300,8 @@ void board_set_servo_raw(uint8_t servo_num, uint16_t value) {
   
   osalSysUnlock();
 }
+#endif
 
 bool board_servos_initialized(void) {
   return servos_hw_initialized;
 }
-#endif

@@ -153,6 +153,7 @@ struct pid_controller_t
     bool use_d; ///< Boolean that determines whether to use D term
 
     float error;      ///< Current error (target - current)
+    float error_deadband; ///< Error deadband in centidegrees
     float prev_error; ///< Previous error (for derivative calculation)
     float integral;   ///< Integral accumulator (sum of errors over time)
     float derivative; ///< Derivative term (rate of change of error)
@@ -166,6 +167,18 @@ struct pid_controller_t
 
     systime_t last_time_ms; ///< Last update time (ChibiOS systime_t)
     float dt;               ///< Delta time in seconds
+
+    // Dynamic linear Kp parameters
+    float lin_min_kp;       ///< Minimum kp for dynamic linear Kp
+    float lin_max_kp;       ///< Maximum kp for dynamic linear Kp
+    float lin_min_error;    ///< Minimum error for dynamic linear Kp
+    float lin_max_error;    ///< Maximum error for dynamic linear Kp
+
+    // Dynamic exponential Kp parameters
+    float exp_min_kp;       ///< Minimum kp for dynamic exponential Kp
+    float exp_max_kp;       ///< Maximum kp for dynamic exponential Kp
+    float exp_min_error;    ///< Minimum error for dynamic exponential Kp
+    float exp_max_error;    ///< Maximum error for dynamic exponential Kp
 };
 
 // Main servo state structure
@@ -252,6 +265,7 @@ servo_response_t servo_update_status(void);
 void small_rotmech_unreach_endstop(void);
 void small_rotmech_reach_endstop(void);
 
+void big_rotmech_arm_esc(void);
 void big_rotmech_unreach_endstop(void);
 void big_rotmech_reach_endstop(void);
 
@@ -268,7 +282,8 @@ void broadcast_rotmech_status(void);
 
 // Debugging functions
 void rotmech_debug_message(const char *fmt, ...);
-void rotmech_debug_status(void);
+void small_rotmech_debug_status(void);
+void big_rotmech_debug_status(void);
 
 // Position calculation functions
 int16_t local_to_global_position(int16_t revolution_count, int16_t local_position);
@@ -288,4 +303,6 @@ bool rotmech_is_0_switch_triggered(void);
 bool rotmech_is_90_switch_triggered(void);
 void rotmech_set_esc_pwm(uint16_t value);
 
+float pid_calculate_linear_kp(float error);
+float pid_calculate_exponential_kp(float error);
 #endif /* ROTMECH_H */

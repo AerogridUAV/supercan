@@ -169,6 +169,52 @@ void big_rotmech_init(void) {
     // ESC Pins
     if(rotmech.type == big_rotmech) {        
         rotmech.esc_port = config_get_by_name("ROTMECH esc port", 0)->val.i;
+         switch (rotmech.esc_port)
+        {
+        case 1:
+            rotmech.esc_pin = SERVO1_LINE;
+            break;
+
+        case 2:
+            rotmech.esc_pin = SERVO2_LINE;
+            break;
+
+        case 3:
+            rotmech.esc_pin = SERVO3_LINE;
+            break;
+
+        case 4:
+            rotmech.esc_pin = SERVO4_LINE;
+            break;
+
+        case 5:
+            rotmech.esc_pin = SERVO5_LINE;
+            break;
+
+        case 6:
+            rotmech.esc_pin = SERVO6_LINE;
+            break;
+
+        case 7:
+            rotmech.esc_pin = SERVO7_LINE;
+            break;
+
+        case 8:
+            rotmech.esc_pin = SERVO8_LINE;
+            break;
+
+        case 9:
+            rotmech.esc_pin = SERVO9_LINE;
+            break;
+
+        case 10:
+            rotmech.esc_pin = SERVO10_LINE;
+            break;
+
+        default:
+            break;
+        }
+        palSetLineMode(rotmech.esc_pin, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
     }
 
     // Start UART
@@ -178,11 +224,13 @@ void big_rotmech_init(void) {
     if (rotmech.type == big_rotmech) {
         pid_init();
     }
-
-    // WAIT UNTIL SERVOS ARE INITIALIZED
-    while(!board_servos_initialized()) {
+    
+    chThdSleepMilliseconds(2000);
+    // Wait for board servos to be initialized
+    while (!board_servos_initialized()) {
         chThdSleepMilliseconds(100);
     }
+    rotmech_debug_message("Board servos initialized\n");
 
     // Start initialization sequence
     big_rotmech_init_sequence();
@@ -193,13 +241,20 @@ void big_rotmech_init(void) {
 }
 
 void big_rotmech_init_sequence(void) {
+
+    // Arm ESC
+    big_rotmech_arm_esc();
+    rotmech_debug_message("ESC armed\n");
+
     if(rotmech_is_0_switch_triggered()) {
+        rotmech_debug_message("Unreaching endstop\n");
         big_rotmech_unreach_endstop();
+        rotmech_debug_message("Unreached endstop\n");
         chThdSleepMilliseconds(2000);
     }
+    rotmech_debug_message("Reaching endstop\n");
     big_rotmech_reach_endstop();
-
-    servo_update_status();
+    rotmech_debug_message("Reached endstop\n");
 }
 
 // ============================================================================
@@ -209,7 +264,6 @@ static THD_FUNCTION(small_rotmech_serial_thd, arg) {
     (void)arg;
     chRegSetThreadName("small_rotmech_serial");
     // Main serial loop (only accessible after init is complete)
-
     while (rotmech.safe_load) {
         small_rotmech_move_to_target();
         servo_update_status();
@@ -223,12 +277,17 @@ static THD_FUNCTION(small_rotmech_serial_thd, arg) {
 static THD_FUNCTION(big_rotmech_serial_thd, arg) {
     (void)arg;
     chRegSetThreadName("big_rotmech_serial");
+    pid_set_output_limits(150.0f);
     while (true) {
     // Only run PID control for big_rotmech (not big_rotmech_sensor)
     if (rotmech.type == big_rotmech) {
-        servo_update_status();
-        pid_update();
-        rotmech_set_esc_pwm(rotmech.pwm_output);
+        if (config_get_by_name("ROTMECH arm", 0)->val.i == 1) {
+            pid_update();
+            rotmech_set_esc_pwm(rotmech.pwm_output);
+        } else {
+            servo_update_status();
+            rotmech_set_esc_pwm(rotmech.pid.output_zero);
+        }
     } else {
         // Just update encoder position for big_rotmech_sensor
         servo_update_status();
@@ -497,16 +556,25 @@ void request_servo_response(uint8_t read_address, uint8_t read_length) {
 // ============================================================================
 // HIGH-LEVEL SERVO CONTROL FUNCTIONS
 // ============================================================================
+void big_rotmech_arm_esc(void) {
+    if (rotmech.port == NULL || rotmech.type != big_rotmech) {
+        return;
+    }
+    rotmech_set_esc_pwm(rotmech.pid.output_zero);
+    chThdSleepMilliseconds(2000); // Wait for ESC to arm
+}
+
 void big_rotmech_unreach_endstop(void) {
+    if (rotmech.port == NULL || rotmech.type == small_rotmech) {
+        return;
+    }
     endstop_reached = true;
-    servo_update_status();
     if (rotmech.type == big_rotmech) {
         uint16_t speed = rotmech.pid.output_zero - rotmech.config.init_speed;
         rotmech_set_esc_pwm(speed);
     }
     while(endstop_reached){
         // Update status
-        servo_update_status();
         if (!rotmech_is_0_switch_triggered()){
             endstop_reached = false;
         }
@@ -516,17 +584,29 @@ void big_rotmech_unreach_endstop(void) {
 
 void big_rotmech_reach_endstop(void) {
     // Move clockwise until endstop is reached
+    if (rotmech.port == NULL || rotmech.type == small_rotmech) {
+        return;
+    }
+
     if (rotmech.type == big_rotmech) {
         uint16_t speed = rotmech.pid.output_zero + rotmech.config.init_speed;
         rotmech_set_esc_pwm(speed);
     }
     while(!rotmech_is_0_switch_triggered()) {
         // Update status
-        servo_update_status();
+        chThdSleepMilliseconds(10);
     }
-    rotmech.target_servo_position = rotmech.current_position_global;
+    servo_update_status();
+
+    rotmech.current_position_global = rotmech.latest_servo_position;
     rotmech.calculation_offset = rotmech.current_position_global + WingPositionToServoPosition(rotmech.config.physical_offset);
+    rotmech.target_servo_position = rotmech.current_position_global;
     rotmech.target_wing_angle = ServoPositionToWingPosition(rotmech.target_servo_position);
+
+    rotmech_debug_message("Big rotmech endstop reached. Offset: %d\n", rotmech.calculation_offset);
+    rotmech_debug_message("Big rotmech current position: %d\n", rotmech.current_position_global);
+    rotmech_debug_message("Big rotmech target position: %d\n", rotmech.target_servo_position);
+    rotmech_debug_message("Big rotmech target angle: %d\n", rotmech.target_wing_angle);
 }
 
 /**
@@ -606,7 +686,7 @@ void rotmech_debug_message(const char *fmt, ...) {
     uavcanDebug(UAVCAN_PROTOCOL_DEBUG_LOGLEVEL_INFO, "ROTMECH", buffer);
 }
 
-void rotmech_debug_status(void) {
+void small_rotmech_debug_status(void) {
     rotmech_debug_message(
         "A:%d CurA:%d TgtA:%d Off:%d CurP:%d TgtP:%d Spd:%d Ld:%d "
         "T:%d V:%d Err:%d H:%d",
@@ -623,6 +703,41 @@ void rotmech_debug_status(void) {
         rotmech.latest_voltage,
         rotmech.latest_error_code,
         rotmech.latest_health_state
+    );
+}
+
+void big_rotmech_debug_status(void) {
+    // Convert speed from servo units to centidegree/s
+    // Same scaling as position conversion but without offset
+    float speed_cdeg_s = (float)rotmech.latest_servo_speed * 
+                         DEGREE_TO_CENTIDEGFREE / 
+                         (rotmech.config.gear_ratio * DEGREE_TO_FEETECH);
+    
+    // Convert floats to int with decimal places
+    int dt_ms = (int)(rotmech.pid.dt * 1000);
+    
+    int error_int = (int)rotmech.pid.error;
+    
+    int speed_int = (int)speed_cdeg_s;
+    
+    int kp_int = (int)(rotmech.pid.kp * 1000);
+    int ki_int = (int)(rotmech.pid.ki * 1000);
+    int kd_int = (int)(rotmech.pid.kd * 1000);
+    
+    int integral_int = (int)(rotmech.pid.integral * 100);
+    
+    rotmech_debug_message(
+        "Ang:%d->%d Spd:%d Err:%d dt:%dms P:%d I:%d D:%d Int:%d PWM:%d",
+        rotmech.latest_wing_angle,
+        rotmech.target_wing_angle,
+        speed_int,           // Speed in centidegree/s
+        error_int,
+        dt_ms,               // dt in milliseconds
+        kp_int,              // Kp * 1000
+        ki_int,              // Ki * 1000
+        kd_int,              // Kd * 1000
+        integral_int,        // Integral * 100
+        (int)rotmech.pwm_output
     );
 }
 
@@ -740,7 +855,7 @@ void global_position_update(void) {
  * @brief Initialize PID controller
  */
 void pid_init(void) {
-    rotmech.pid.kp = 50.0f;
+    rotmech.pid.kp = 0.10f;
     rotmech.pid.ki = 0.0f;
     rotmech.pid.kd = 0.0f;
     
@@ -750,6 +865,7 @@ void pid_init(void) {
     rotmech.pid.use_d = (rotmech.pid.kd != 0.0f);
     
     rotmech.pid.error = 0.0f;
+    rotmech.pid.error_deadband = 50.0f;
     rotmech.pid.prev_error = 0.0f;
     rotmech.pid.integral = 0.0f;
     rotmech.pid.derivative = 0.0f;
@@ -765,6 +881,17 @@ void pid_init(void) {
     
     rotmech.pid.last_time_ms = chVTGetSystemTime();
     rotmech.pid.dt = 0.0f;
+
+    rotmech.pid.lin_min_kp = 0.005f;
+    rotmech.pid.lin_max_kp = 10.0f;
+    rotmech.pid.lin_max_error = 500.0f;
+    rotmech.pid.lin_min_error = 0.0f;
+
+
+    rotmech.pid.exp_min_kp = 0.05f;
+    rotmech.pid.exp_max_kp = 0.5f;
+    rotmech.pid.exp_max_error = 500.0f;
+    rotmech.pid.exp_min_error = 0.0f;
 }
 
 /**
@@ -773,6 +900,7 @@ void pid_init(void) {
  */
 void pid_update(void) {
     // Calculate time delta using ChibiOS time handling
+    servo_update_status();
     systime_t current_time = chVTGetSystemTime();
     systime_t time_diff = chVTTimeElapsedSinceX(rotmech.pid.last_time_ms);
     rotmech.pid.last_time_ms = current_time;
@@ -788,6 +916,13 @@ void pid_update(void) {
     // Calculate error (target - current)
     rotmech.pid.error = (float)rotmech.target_wing_angle - 
                              (float)rotmech.latest_wing_angle;
+
+
+    rotmech.pid.kp = pid_calculate_exponential_kp(rotmech.pid.error);
+
+    if (rotmech.pid.error > -rotmech.pid.error_deadband && rotmech.pid.error < rotmech.pid.error_deadband) {
+        rotmech.pid.error = 0;
+    }
     
     // Initialize output
     float output = rotmech.pid.output_zero;
@@ -822,6 +957,10 @@ void pid_update(void) {
     } else {
         rotmech.pid.derivative = 0.0f;
     }
+
+    // Invert output for proper ESC direction
+    output = rotmech.pid.output_zero + 
+            -1.0f * (output - rotmech.pid.output_zero);
     
     // Clamp output
     if (output > rotmech.pid.output_max) {
@@ -905,7 +1044,63 @@ bool rotmech_is_90_switch_triggered(void) {
 void rotmech_set_esc_pwm(uint16_t value) {
     if (rotmech.type == big_rotmech) {
         board_set_servo_raw(rotmech.esc_port, value);
-        rotmech_debug_message("ESC PWM set to %d", value);
-        rotmech_debug_status();
+        big_rotmech_debug_status();
+    }
+}
+
+/**
+ * @brief Dynamically adjust Kp based on error magnitude
+ * @param error Current position error
+ * @return Adjusted Kp value
+ */
+float pid_calculate_linear_kp(float error) {
+    
+    float abs_error = fabsf(error);
+    float kp;
+
+    if (abs_error <= rotmech.pid.lin_min_error) {
+        // Low error plateau
+        kp = rotmech.pid.lin_min_kp;
+    } 
+    else if (abs_error >= rotmech.pid.lin_max_error) {
+        // High error plateau
+        kp = rotmech.pid.lin_max_kp;
+    } 
+    else {
+        // Linear ramp region
+        float ramp_progress = (abs_error - rotmech.pid.lin_min_error) / (rotmech.pid.lin_max_error - rotmech.pid.lin_min_error);
+        kp = rotmech.pid.lin_min_kp + (rotmech.pid.lin_max_kp - rotmech.pid.lin_min_kp) * ramp_progress;
+    }
+    
+    return kp;
+}
+
+/**
+ * @brief Exponentially adjust Kp based on error magnitude with plateau
+ * @param error Current position error
+ * @return Adjusted Kp value
+ */
+float pid_calculate_exponential_kp(float error) {
+    float abs_error = fabsf(error);
+    float kp;
+
+    if (abs_error <= rotmech.pid.exp_min_error) {
+        // Low error plateau
+        kp = rotmech.pid.exp_min_kp;
+    } 
+    else if (abs_error >= rotmech.pid.exp_max_error) {
+        // High error plateau
+        kp = rotmech.pid.exp_max_kp;
+    } 
+    else {
+        // Exponential growth region
+        // lambda = ln(100) / error_plateau gives ~99% at plateau
+        float lambda = 4.605f / rotmech.pid.exp_max_error;
+        
+        // Exponential formula: kp = KP_PLATEAU * (1 - e^(-lambda * error))
+        kp = rotmech.pid.exp_max_kp * 
+             (1.0f - expf(-lambda * abs_error));
+
+        return kp;
     }
 }

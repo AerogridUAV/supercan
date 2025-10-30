@@ -227,7 +227,7 @@
 extern "C" {
 #endif
   void boardInit(void);
-
+  
   void board_init_servos(bool servos[], uint8_t cnt);
   void board_disable_servos(void);
   void board_set_servos(bool lock, uint16_t servos[], uint8_t cnt);
