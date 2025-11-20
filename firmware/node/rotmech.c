@@ -27,21 +27,23 @@ void rotmech_init(void){
     // Rotation mechanism actuator index
     rotmech.index = config_get_by_name("ROTMECH index", 0)->val.i;
 
-    // Determine rotation mechanism type, if >=3 no rotmech is used
+    // Determine rotation mechanism type, 0 (and default // >3) is no rotation mech if >=3 no rotmech is used
     uint8_t rotmech_type = config_get_by_name("ROTMECH type", 0)->val.i;
     switch (rotmech_type) {
-        case 0:
+
+        case 1:
             rotmech.type = small_rotmech;
             small_rotmech_init();
             break;
-        case 1:
+        case 2:
             rotmech.type = big_rotmech;
             big_rotmech_init();
             break;
-        case 2:
+        case 3:
             rotmech.type = big_rotmech_sensor;
             big_rotmech_init();
             break;
+        case 0:
         default:
             // No rotation mechanism configured
             break;

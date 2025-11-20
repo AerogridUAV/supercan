@@ -74,7 +74,7 @@ struct config_item_t config_items[] = {
     {.name = "ROTMECH index", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 255},
     {.name = "ROTMECH servo id", .type = CONFIG_TYPE_INT, .val.i = 1, .def.i = 1, .min.i = 1, .max.i = 253},
     {.name = "ROTMECH esc port", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 10},
-    {.name = "ROTMECH type", .type = CONFIG_TYPE_INT, .val.i = 3, .def.i = 3, .min.i = 0, .max.i = 3},
+    {.name = "ROTMECH type", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = 0, .max.i = 3},
     {.name = "ROTMECH min angle", .type = CONFIG_TYPE_INT, .val.i = 0, .def.i = 0, .min.i = -1000, .max.i = 0},
     {.name = "ROTMECH max angle", .type = CONFIG_TYPE_INT, .val.i = 9000, .def.i = 9000, .min.i = 0, .max.i = 10000},
     {.name = "ROTMECH telem frequency", .type = CONFIG_TYPE_FLOAT, .val.f = 10, .def.f = 10, .min.f = 0.0001, .max.f = 10000},
