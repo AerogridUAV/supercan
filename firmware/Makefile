@@ -5,7 +5,7 @@ BMP_PORT ?= $(shell \
         udevadm info -a -n $$dev | grep -q 'ATTRS{product}=="Black Magic Probe"' && echo $$dev; \
     done | head -n1 \
 )
-GDB ?= gdb
+GDB ?= arm-none-eabi-gdb
 
 all: bootloader node
 
