@@ -530,7 +530,7 @@ void small_rotmech_unreach_endstop(void) {
     while(endstop_reached){
         // Update status
         servo_update_status();
-        if (rotmech.target_wing_angle - rotmech.latest_wing_angle < 5){
+        if (rotmech.target_wing_angle - rotmech.latest_wing_angle < 15){
             endstop_reached = false;
         }
     }
@@ -752,16 +752,21 @@ void small_rotmech_setup_angle(void) {
         return;
     }
     
-    uint8_t write_unlock[2] = {0x37, 0};
-    send_instruction(rotmech.servo_id, INST_WRITE, write_unlock, 2);
+    uint8_t write_unlock[2] = {STS_WRITE_LOCK, 0};
+    send_instruction(rotmech.servo_id, INST_WRITE, write_unlock, sizeof(write_unlock));
     chThdSleepMicroseconds(SERVO_SLEEP_TIME_US);
     
     uint8_t angle_limit[3] = {STS_MAXIMUM_ANGLE, 0, 0};
-    send_instruction(rotmech.servo_id, INST_WRITE, angle_limit, 3);
+    send_instruction(rotmech.servo_id, INST_WRITE, angle_limit, sizeof(angle_limit));
     chThdSleepMicroseconds(SERVO_SLEEP_TIME_US);
-    
-    uint8_t write_lock[2] = {0x37, 1};
-    send_instruction(rotmech.servo_id, INST_WRITE, write_lock, 2);
+
+    // POS_P gain, POS_D gain, POS_I gain
+    uint8_t pid_params[4] = {STS_POS_DERIVATIVE_GAIN, 5, 0, 0};
+    send_instruction(rotmech.servo_id, INST_WRITE, pid_params, sizeof(pid_params));
+    chThdSleepMicroseconds(SERVO_SLEEP_TIME_US);
+
+    uint8_t write_lock[2] = {STS_WRITE_LOCK, 1};
+    send_instruction(rotmech.servo_id, INST_WRITE, write_lock, sizeof(write_lock));
     chThdSleepMicroseconds(SERVO_SLEEP_TIME_US);
 
 }
