@@ -359,8 +359,12 @@ void handle_esc_rawcommand(struct uavcan_iface_t *iface __attribute__((unused)),
 #include "rotmech.h"
   if(rotmech.port != NULL && rotmech.index < msg.cmd.len) {
     // Set the target wing angle (in centidegrees) clamped between min & max angle
-    rotmech.target_wing_angle = esc_clamp(msg.cmd.data[rotmech.index], rotmech.config.min_angle, rotmech.config.max_angle);
-    rotmech.target_servo_position = WingPositionToServoPosition(rotmech.target_wing_angle);
+    // We have a failsafe value of -1 triggered when e.g. the vehicle is killed where we don't want it to move -> keep previous value
+    // NOTE: Long-term we should probably grab the value when it is killed or potentially disarm the servo -> this will keep going if there is an existing setpoint
+    if (msg.cmd.data[rotmech.index] != -1) {
+      rotmech.target_wing_angle = esc_clamp(msg.cmd.data[rotmech.index], rotmech.config.min_angle, rotmech.config.max_angle);
+      rotmech.target_servo_position = WingPositionToServoPosition(rotmech.target_wing_angle);
+    }
   }
 
   #ifdef SERVO1_LINE
