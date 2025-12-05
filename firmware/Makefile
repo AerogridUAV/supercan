@@ -5,7 +5,18 @@ BMP_PORT ?= $(shell \
         udevadm info -a -n $$dev | grep -q 'ATTRS{product}=="Black Magic Probe"' && echo $$dev; \
     done | head -n1 \
 )
-GDB ?= arm-none-eabi-gdb
+
+# Default GDB
+GDB ?= gdb
+
+# Provide a convenience target to select gdb-multiarch.
+# Usage: make multiarch upload
+ifneq ($(filter multiarch,$(MAKECMDGOALS)),)
+GDB := gdb-multiarch
+.PHONY: multiarch
+multiarch:
+	@:
+endif
 
 all: bootloader node
 
