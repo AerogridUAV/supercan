@@ -1050,7 +1050,8 @@ bool rotmech_is_90_switch_triggered(void) {
 
 void rotmech_set_esc_pwm(uint16_t value) {
     if (rotmech.type == big_rotmech) {
-        board_set_servo_raw(rotmech.esc_port, value);
+        rotmech.pwm_output = value;
+        board_set_servo_raw(rotmech.esc_port, rotmech.pwm_output);
         big_rotmech_debug_status();
     }
 }
