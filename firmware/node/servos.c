@@ -369,52 +369,52 @@ void handle_esc_rawcommand(struct uavcan_iface_t *iface __attribute__((unused)),
 
   #ifdef SERVO1_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 1) {
-    servo1_cmd = rotmech.pwm_output;
+    servo1_cmd = 0;
   }
 #endif
 #ifdef SERVO2_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 2) {
-    servo2_cmd = rotmech.pwm_output;
+    servo2_cmd = 0;
   }
 #endif
 #ifdef SERVO3_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 2) {
-    servo3_cmd = rotmech.pwm_output;
+    servo3_cmd = 0;
   }
 #endif
 #ifdef SERVO4_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 3) {
-    servo4_cmd = rotmech.pwm_output;
+    servo4_cmd = 0;
   }
 #endif
 #ifdef SERVO5_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 4) {
-    servo5_cmd = rotmech.pwm_output;
+    servo5_cmd = 0;
   }
 #endif
 #ifdef SERVO6_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 5) {
-    servo6_cmd = rotmech.pwm_output;
+    servo6_cmd = 0;
   }
 #endif
 #ifdef SERVO7_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 6) {
-    servo7_cmd = rotmech.pwm_output;
+    servo7_cmd = 0;
   }
 #endif
 #ifdef SERVO8_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 7) {
-    servo8_cmd = rotmech.pwm_output;
+    servo8_cmd = 0;
   }
 #endif
 #ifdef SERVO9_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 8) {
-    servo9_cmd = rotmech.pwm_output;
+    servo9_cmd = 0;
   }
 #endif
 #ifdef SERVO10_LINE
   if(rotmech.port != NULL && rotmech.type == big_rotmech && rotmech.esc_port == 9) {
-    servo10_cmd = rotmech.pwm_output;
+    servo10_cmd = 0;
   }
 #endif
 
